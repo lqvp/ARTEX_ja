@@ -312,7 +312,7 @@ func TestTagAppendStripRoundTrip(t *testing.T) {
 	for _, body := range []string{
 		"plain body",
 		"body\nwith newlines\n",
-		"中文正文 🔐",
+		"中文正文 🔐", // allowlist: multibyte round-trip fixture — tag append/strip must preserve CJK
 		"",
 		"body that mentions <noa-ref> in passing",
 	} {
