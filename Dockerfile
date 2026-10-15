@@ -1,18 +1,48 @@
 # syntax=docker/dockerfile:1
 #
-# Runtime image (no compilation in the image): installs only common tools and places the
-# **pre-compiled Linux single binary** in it. The binary is cross-compiled by the CI's
-# binaries job (pure Go, no QEMU), placed in the build context at dist/<TARGETARCH>/artex
-# per target architecture. This way multi-arch builds only need to emulate the apt layer
-# for arm64, no longer emulating Next/Go compilation, which is much faster.
-#
-# For local manual image builds, prepare the binary first:
-#   cd web && npm run build:static && cd ..
-#   cp -r web/out server/webui/dist
-#   CGO_ENABLED=0 GOARCH=amd64 go build -tags embedui -o dist/amd64/artex ./cmd/artex
-#   docker build -t artex:local .
-FROM python:3.12-slim-bookworm
+# Multi-stage build: frontend static export → Go single binary (embedded frontend) → runtime image.
+# The original Docker Hub image source (autumn27/artex) is no longer maintained; this repo now
+# supports self-service building from pure source:
+#   docker compose build        # or docker build -t artex:local .
+# TARGETARCH is injected automatically by buildx (amd64/arm64); Go cross-compilation needs no QEMU.
+# The runtime layer installs only tools; all compilation happens in the build stages.
+# Behind mainland-China networks the module sources can be overridden (defaults are already
+# China-friendly):
+#   --build-arg GOPROXY=https://goproxy.cn,direct
+#   --build-arg NPM_REGISTRY=https://registry.npmmirror.com
+
+########## Stage 1: frontend static export ##########
+FROM node:20-bookworm AS web
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+WORKDIR /web
+# --ignore-scripts: skips the prepare(husky) hook — there is no .git in the container and husky
+# would fail; Next.js/Biome platform binaries come via optionalDependencies and don't rely on
+# lifecycle scripts.
+COPY web/package.json web/package-lock.json ./
+RUN npm config set registry "$NPM_REGISTRY" && npm ci --ignore-scripts
+COPY web/ ./
+RUN NEXT_EXPORT=1 npm run build:static
+
+########## Stage 2: Go backend (embedded frontend, static build) ##########
+FROM golang:1.26-bookworm AS gobuild
 ARG TARGETARCH
+ARG GOPROXY=https://goproxy.cn,https://proxy.golang.org,direct
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# Frontend static artifacts are copied in from the web stage (.dockerignore already excludes
+# the host dist/ directory, so there is no conflict).
+COPY --from=web /web/out/ server/webui/dist/
+RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" go build -tags embedui -trimpath -o /out/artex ./cmd/artex
+
+########## Stage 3: runtime image (same as the original: tools + preinstalled Playwright) ##########
+FROM python:3.12-slim-bookworm
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+# The runtime layer's global npm installs and the chromium download also use China mirrors
+# (reachable from global networks too).
+ENV npm_config_registry=$NPM_REGISTRY \
+    PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
 # Common tools: ripgrep / curl / vim, plus a batch of recon staples (add/remove as needed).
 # Node 20.x from NodeSource: bookworm's bundled apt nodejs is 18, and Playwright requires >=20.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -32,15 +62,15 @@ RUN npm install -g @playwright/mcp@latest @playwright/cli@latest playwright@late
     && playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-# Pre-compiled binary for the corresponding architecture (dist/amd64/artex or dist/arm64/artex)
-COPY dist/${TARGETARCH}/artex /app/artex
+# The single binary produced by the build stages (embedded frontend)
+COPY --from=gobuild /out/artex /app/artex
 # Daemon start script: after the process exits it decides whether to pull it back up based on
 # the exit code; the page's one-click update relies on it to complete the swap.
 # It is also responsible for forwarding SIGTERM to artex — docker stop only sends the signal
 # to PID 1; without forwarding artex receives nothing, cannot do a graceful shutdown, and
 # gets SIGKILLed after 10 seconds.
 COPY start.sh /app/start.sh
-RUN chmod +x /app/artex /App/start.sh
+RUN chmod +x /app/artex /app/start.sh
 COPY skills/ /app/skills/
 # data/ (SQLite + jwt.key) persistence point
 VOLUME ["/app/data"]

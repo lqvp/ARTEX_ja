@@ -4,9 +4,9 @@
 
 AI-driven autonomous penetration testing system (Go backend + Next.js frontend)
 
-🌐 **Online Demo**: [https://artex-demo.vercel.app/](https://artex-demo.vercel.app/)
+🌐 **Online Demo (mock data)**: [https://artex-demo.mhtsec.com](https://artex-demo.mhtsec.com)
 
-📦 **This repository is the last pure-source-code backup of ARTEX. The Docker deployment source is no longer maintained — build locally with an AI assistant instead.**
+📦 **This repository is the last pure-source-code backup of ARTEX. The original Docker image source `autumn27/artex` is no longer maintained — the image is now self-maintained by this repository as `mianhuatang11/artex` (Docker Hub); if the pull fails, `docker compose build` builds locally from pure source with no external pre-built dependencies.**
 
 </div>
 
@@ -14,7 +14,7 @@ AI-driven autonomous penetration testing system (Go backend + Next.js frontend)
 
 ## Screenshots
 
-> See the [Online Demo](https://artex-demo.vercel.app/) for the full interactive experience. UI labels are in Japanese.
+> See the [Online Demo](https://artex-demo.mhtsec.com) (pure frontend + mock data, no backend needed) for the full interactive experience. UI labels are in Japanese.
 
 | Dashboard (overview / token usage / activity) | Task list |
 | :---: | :---: |
@@ -69,7 +69,7 @@ Assets can be synced directly from [ScopeSentry](https://github.com/Autumn-27/Sc
 ### Method 1: One-click install script (recommended)
 
 ```bash
-git clone https://github.com/Autumn-27/ARTEX.git
+git clone https://github.com/mhtsec/ARTEX.git
 cd ARTEX
 ./install.sh
 ```
@@ -84,12 +84,16 @@ After installation, open **http://localhost:8787** (you'll be taken to `/setup` 
 ### Method 2: Docker Compose (manual)
 
 ```bash
-git clone https://github.com/Autumn-27/ARTEX.git
+git clone https://github.com/mhtsec/ARTEX.git
 cd ARTEX
 cp .env.example .env          # fill in POSTGRES_PASSWORD, optional ANTHROPIC_API_KEY
-docker compose up -d          # pulls the autumn27/artex image + postgres
+docker compose up -d          # pulls the mianhuatang11/artex image + postgres
 # → http://localhost:8787
 ```
+
+> The original image source `autumn27/artex` has been deleted from Docker Hub; the image is now self-maintained by this repository as **`mianhuatang11/artex`**.
+> When the image source is unavailable (or you want to modify the code), build locally from pure source: `docker compose build && docker compose up -d`.
+> The Dockerfile is a multi-stage build (frontend static export → Go static build → runtime image) that uses China-friendly dependency sources by default; override with `--build-arg GOPROXY=... / --build-arg NPM_REGISTRY=...`.
 
 The image includes common tools (ripgrep/curl/vim/npm/nmap…); `./skills` and `./data` are persisted via bind mounts.
 
@@ -98,7 +102,7 @@ Legacy SSE services typically establish the event stream via `GET /sse`, then re
 
 ### Method 3: Pre-compiled binary (Releases)
 
-Download the zip for your platform from [Releases](https://github.com/Autumn-27/ARTEX/releases). After extraction you'll have `artex` + `start.sh` (`start.bat` on Windows) + `skills/` + `config.example.json`:
+Download the zip for your platform from the original repo's [Releases](https://github.com/Autumn-27/ARTEX/releases) (**this backup repository does not host binaries**; if the original Releases also fail, use Method 2 or Method 4 instead). After extraction you'll have `artex` + `start.sh` (`start.bat` on Windows) + `skills/` + `config.example.json`:
 
 ```bash
 cp config.example.json config.json   # fill in the database connection
@@ -273,6 +277,11 @@ Historical records for this version are viewed through the vulnerability detail 
 - Frontend: `cd web && npm run dev` (proxies `/api` to the backend, with hot reload)
 - Tests: `go test ./...`
 - Mock preview (no backend): `cd web && NEXT_PUBLIC_MOCK=1 npm run dev`
+- Redeploy the Online Demo (Cloudflare Pages, static export + mock data):
+  ```bash
+  cd web && NEXT_PUBLIC_MOCK=1 npm run build:static
+  CLOUDFLARE_API_TOKEN=<token> npx wrangler pages deploy out --project-name=artex-demo --branch=main
+  ```
 
 ---
 
