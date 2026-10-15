@@ -91,7 +91,7 @@ func (b *contextBuilder) summarize(ctx context.Context, prior, text string) (str
 			return "", errors.New("side question context compaction has reached this run's call limit; narrow the question scope and retry")
 		}
 		overhead := EstimateInputTokens(llm.CompletionRequest{System: []string{summaryInstruction}, Messages: []llm.Message{llm.UserText("[previous summary]\n" + prior + "\n[new material fragment]\n")}})
-		chunkBytes := min(32000, b.window-2048-overhead-512) * 3
+		chunkBytes := min(32000, b.window-2048-overhead-1024) * 3
 		if chunkBytes < 1024 {
 			return "", ErrContextBudget
 		}

@@ -26,9 +26,9 @@ func TestIsQuotaExhaustedMessage(t *testing.T) {
 		`credit balance is too low`,
 		// allowlist: Chinese-language gateway quota marker kept on purpose — it exercises
 		// the Chinese detection keys that IsQuotaExhaustedMessage deliberately preserves
-		// (agent/provider.go markers list, Task-15 preserve) for Chinese-language
+		// (agent/provider.go:310 markers) for Chinese-language
 		// provider/gateway error messages.
-		`账户余额不足，请充值`,  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		`账户余额不足，请充值`, // allowlist: production preserve — matched by the Chinese balance-exhaustion detection keys at agent/provider.go:310
 	}
 	for _, message := range positive {
 		if !IsQuotaExhaustedMessage(message) {

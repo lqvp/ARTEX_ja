@@ -121,7 +121,7 @@ func TestLiveContextReview(t *testing.T) {
 			if verdict.Reason == "" {
 				t.Errorf("reviewer omitted the required explanation: %q", reply)
 			}
-			operation, _, _ := strings.Cut(verdict.Reason, "；成功后的后果：")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			operation, _, _ := strings.Cut(verdict.Reason, "；成功后的后果：") // allowlist: production preserve — intercept/prompt.go requires verdict comments as three segments separated by this exact operation/consequence marker, so the test must cut on it
 			if tc.name == "read_does_not_repeat_prior_creation" {
 				for _, verb := range []string{"create", "new", "write"} {
 					if strings.Contains(operation, verb) {

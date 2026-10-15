@@ -54,7 +54,7 @@ func newNotifyFixture(t *testing.T) *notifyFixture {
 
 	// Create a task of our own: the task built by the shared trafficEvidenceServer fixture exposes no exploration id,
 	// yet recording a finding requires one.
-	task, err := s.m.CreateTask("通知推送测试", "推送行为验证", nil, 0, 0)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	task, err := s.m.CreateTask("notification push test", "push behavior verification", nil, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func newNotifyFixture(t *testing.T) *notifyFixture {
 	f := &notifyFixture{s: s, pg: pg, request: request, n: newNotifier(s), taskID: taskID, expID: task.ExpID, cleanupMark: mark}
 	t.Cleanup(func() {
 		if _, err := pg.Exec(`DELETE FROM notification_events WHERE id > $1`, f.cleanupMark); err != nil {
-			t.Logf("清理通知事件失败: %v", err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			t.Logf("failed to clean up notification events: %v", err)
 		}
 	})
 	// The master switch must be on (other tests may have turned it off).
@@ -107,7 +107,7 @@ func (f *notifyFixture) record(t *testing.T, vulnclass, severity string) int64 {
 		Evidence:      "poc",
 	}, nil)
 	if err != nil {
-		t.Fatalf("记录漏洞失败: %v", err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("failed to record finding: %v", err)
 	}
 	return out.FindingID
 }
@@ -117,7 +117,7 @@ func (f *notifyFixture) channel(t *testing.T, id int64) *db.NotificationChannel 
 	t.Helper()
 	ch, err := f.pg.NotificationChannelByID(context.Background(), id)
 	if err != nil {
-		t.Fatalf("读渠道失败: %v", err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("failed to read channel: %v", err)
 	}
 	return ch
 }
@@ -127,7 +127,7 @@ func (f *notifyFixture) deliver(t *testing.T, chID int64, baseURL string) {
 	t.Helper()
 	ctx := context.Background()
 	if _, _, err := f.pg.FanOutPendingEvents(ctx, 500); err != nil {
-		t.Fatalf("分派失败: %v", err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("failed to fan out pending events: %v", err)
 	}
 	f.n.stepRealtime(ctx, f.channel(t, chID), 50, baseURL)
 }
@@ -138,13 +138,13 @@ func (f *notifyFixture) createChannel(t *testing.T, payload map[string]any) int6
 	raw, _ := json.Marshal(payload)
 	r := f.request("POST", "/api/notify/channels", string(raw))
 	if r.Code != 200 {
-		t.Fatalf("建渠道失败 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("failed to create channel %d: %s", r.Code, r.Body)
 	}
 	var res struct {
 		ID int64 `json:"id"`
 	}
 	if err := json.Unmarshal(r.Body.Bytes(), &res); err != nil || res.ID == 0 {
-		t.Fatalf("建渠道返回异常: %s (%v)", r.Body, err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("unexpected response from channel creation: %s (%v)", r.Body, err)
 	}
 	t.Cleanup(func() { f.pg.Exec(`DELETE FROM notification_channels WHERE id=$1`, res.ID) })
 	return res.ID
@@ -185,7 +185,7 @@ func (f *fakeWebhook) body(t *testing.T, i int) map[string]any {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if i >= len(f.bodies) {
-		t.Fatalf("假接收端只收到 %d 条请求，取不到第 %d 条", len(f.bodies), i)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("fake receiver received only %d requests; cannot fetch request #%d", len(f.bodies), i)
 	}
 	return f.bodies[i]
 }
@@ -193,7 +193,7 @@ func (f *fakeWebhook) body(t *testing.T, i int) map[string]any {
 func (f *fakeWebhook) last(t *testing.T) map[string]any {
 	t.Helper()
 	if f.count() == 0 {
-		t.Fatal("假接收端没有收到任何请求")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("fake receiver received no requests")
 	}
 	return f.body(t, f.count()-1)
 }
@@ -213,7 +213,7 @@ func markdownText(t *testing.T, body map[string]any) string {
 			}
 		}
 	}
-	t.Fatalf("请求体里没有可识别的正文: %v", body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	t.Fatalf("request body has no recognizable message text: %v", body)
 	return ""
 }
 
@@ -230,20 +230,20 @@ func TestNotifyEndToEndRealtimeDelivery(t *testing.T) {
 	f := newNotifyFixture(t)
 	hook := newFakeWebhook(t)
 	chID := f.createChannel(t, map[string]any{
-		"name":   "实时推送",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "Realtime push",
 		"kind":   notify.KindDingTalk,
 		"config": map[string]any{"webhook": hook.URL},
 	})
-	f.record(t, "SQL注入", "high")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	f.record(t, "SQL injection", "high")
 	f.deliver(t, chID, "")
 
 	if hook.count() != 1 {
-		t.Fatalf("应发出 1 条消息，实际 %d", hook.count())  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("expected 1 message to be sent, got %d", hook.count())
 	}
 	text := markdownText(t, hook.last(t))
-	for _, want := range []string{"SQL注入", "高危", "摘要"} {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	for _, want := range []string{"SQL injection", "🟠 High", "Summary"} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("消息正文缺少 %q:\n%s", want, text)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			t.Fatalf("message body is missing %q:\n%s", want, text)
 		}
 	}
 	// The delivery should end up as sent.
@@ -253,24 +253,24 @@ func TestNotifyEndToEndRealtimeDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	if pending != 0 {
-		t.Fatalf("投递后仍有 %d 条未标记 sent", pending)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("%d deliveries are still not marked sent after delivery", pending)
 	}
 }
 
 func TestNotifyChannelAPIMasksSecretsAndPreservesOnUpdate(t *testing.T) {
 	f := newNotifyFixture(t)
 	chID := f.createChannel(t, map[string]any{
-		"name":   "掩码用例",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "masking case",
 		"kind":   notify.KindDingTalk,
 		"config": map[string]any{"webhook": "https://oapi.dingtalk.com/robot/send?access_token=abc123456", "secret": "SECabcdef123456"},
 	})
 
 	r := f.request("GET", "/api/notify/channels", "")
 	if r.Code != 200 {
-		t.Fatalf("列渠道失败 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("failed to list channels %d: %s", r.Code, r.Body)
 	}
 	if strings.Contains(r.Body.String(), "abc123456") || strings.Contains(r.Body.String(), "SECabcdef123456") {
-		t.Fatalf("接口回显泄露了凭据: %s", r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("API response leaks credentials: %s", r.Body)
 	}
 	var listed struct {
 		Channels []struct {
@@ -293,41 +293,41 @@ func TestNotifyChannelAPIMasksSecretsAndPreservesOnUpdate(t *testing.T) {
 		}
 	}
 	if mine == nil {
-		t.Fatal("新建的渠道未出现在列表里")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("newly created channel did not appear in the list")
 	}
 	if !notify.IsMasked(fmt.Sprint(mine.Config["webhook"])) || !notify.IsMasked(fmt.Sprint(mine.Config["secret"])) {
-		t.Fatalf("凭据字段应为掩码值: %v", mine.Config)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("credential fields should be masked values: %v", mine.Config)
 	}
 	if len(mine.SecretKeys) == 0 {
-		t.Fatal("接口应告知前端哪些字段是凭据")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("API should tell the frontend which fields are credentials")
 	}
 
 	// PATCH changes only the name and echoes back the masked credentials: the real credentials must survive untouched.
 	body, _ := json.Marshal(map[string]any{
-		"name":   "改名后",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "renamed channel",
 		"config": map[string]any{"webhook": fmt.Sprint(mine.Config["webhook"]), "secret": fmt.Sprint(mine.Config["secret"])},
 	})
 	if r := f.request("PATCH", fmt.Sprintf("/api/notify/channels/%d", chID), string(body)); r.Code != 200 {
-		t.Fatalf("更新失败 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("update failed %d: %s", r.Code, r.Body)
 	}
 	cfg := f.channelConfig(t, chID)
 	if cfg["webhook"] != "https://oapi.dingtalk.com/robot/send?access_token=abc123456" {
-		t.Fatalf("掩码回传把真凭据覆盖了: %v", cfg["webhook"])  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("echoing the masked value back overwrote the real credential: %v", cfg["webhook"])
 	}
 	if cfg["secret"] != "SECabcdef123456" {
-		t.Fatalf("掩码回传把 secret 覆盖了: %v", cfg["secret"])  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("echoing the masked value back overwrote the secret: %v", cfg["secret"])
 	}
-	if f.channel(t, chID).Name != "改名后" {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		t.Fatal("名字未更新")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	if f.channel(t, chID).Name != "renamed channel" {
+		t.Fatal("name was not updated")
 	}
 
 	// Explicitly clearing secret must take effect (unlike "send the masked value back = keep unchanged").
 	body, _ = json.Marshal(map[string]any{"config": map[string]any{"secret": ""}})
 	if r := f.request("PATCH", fmt.Sprintf("/api/notify/channels/%d", chID), string(body)); r.Code != 200 {
-		t.Fatalf("清空 secret 失败 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("clearing the secret failed %d: %s", r.Code, r.Body)
 	}
 	if _, still := f.channelConfig(t, chID)["secret"]; still {
-		t.Fatal("空串应清空 secret")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("an empty string should clear the secret")
 	}
 }
 
@@ -347,26 +347,26 @@ func TestNotifyChannelAPICreateValidation(t *testing.T) {
 		payload map[string]any
 		wantSub string
 	}{
-		{"类型非法", map[string]any{"name": "x", "kind": "nope", "config": map[string]any{}}, "Invalid channel kind"},  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		{"缺名称", map[string]any{"kind": notify.KindDingTalk, "config": map[string]any{"webhook": "https://e.com/h"}}, "Channel name is required"},  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		{"缺 webhook", map[string]any{"name": "x", "kind": notify.KindDingTalk, "config": map[string]any{}}, "Webhook"},  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		{"webhook 协议非法", map[string]any{"name": "x", "kind": notify.KindDingTalk, "config": map[string]any{"webhook": "file:///etc/passwd"}}, "invalid"},  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		{"模式非法", map[string]any{"name": "x", "kind": notify.KindDingTalk, "mode": "sometimes", "config": map[string]any{"webhook": "https://e.com/h"}}, "push mode"},  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		{"invalid kind", map[string]any{"name": "x", "kind": "nope", "config": map[string]any{}}, "Invalid channel kind"},
+		{"missing name", map[string]any{"kind": notify.KindDingTalk, "config": map[string]any{"webhook": "https://e.com/h"}}, "Channel name is required"},
+		{"missing webhook", map[string]any{"name": "x", "kind": notify.KindDingTalk, "config": map[string]any{}}, "Webhook"},
+		{"invalid webhook protocol", map[string]any{"name": "x", "kind": notify.KindDingTalk, "config": map[string]any{"webhook": "file:///etc/passwd"}}, "invalid"},
+		{"invalid mode", map[string]any{"name": "x", "kind": notify.KindDingTalk, "mode": "sometimes", "config": map[string]any{"webhook": "https://e.com/h"}}, "push mode"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			raw, _ := json.Marshal(tc.payload)
 			r := f.request("POST", "/api/notify/channels", string(raw))
 			if r.Code != 400 {
-				t.Fatalf("应返回 400，得到 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+				t.Fatalf("expected 400, got %d: %s", r.Code, r.Body)
 			}
 			if !strings.Contains(r.Body.String(), tc.wantSub) {
-				t.Fatalf("错误信息应提到 %q，得到 %s", tc.wantSub, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+				t.Fatalf("error message should mention %q, got %s", tc.wantSub, r.Body)
 			}
 		})
 	}
 	if r := f.request("DELETE", "/api/notify/channels/99999999", ""); r.Code != 404 {
-		t.Fatalf("删除不存在的渠道应 404，得到 %d", r.Code)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("deleting a nonexistent channel should return 404, got %d", r.Code)
 	}
 }
 
@@ -374,12 +374,12 @@ func TestNotifyFilterBlocksBelowThreshold(t *testing.T) {
 	f := newNotifyFixture(t)
 	hook := newFakeWebhook(t)
 	chID := f.createChannel(t, map[string]any{
-		"name":   "仅严重",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "critical only",
 		"kind":   notify.KindDingTalk,
 		"config": map[string]any{"webhook": hook.URL},
 		"filter": map[string]any{"min_severity": "critical"},
 	})
-	f.record(t, "低危问题", "low")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	f.record(t, "Low severity issue", "low")
 	if _, _, err := f.pg.FanOutPendingEvents(context.Background(), 500); err != nil {
 		t.Fatal(err)
 	}
@@ -388,11 +388,11 @@ func TestNotifyFilterBlocksBelowThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n != 0 {
-		t.Fatalf("低于阈值的漏洞不该产生投递，得到 %d 条", n)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("a finding below the threshold should not produce deliveries, got %d", n)
 	}
 	f.n.stepRealtime(context.Background(), f.channel(t, chID), 50, "")
 	if hook.count() != 0 {
-		t.Fatal("被过滤的漏洞不应发出消息")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("a filtered finding should not send a message")
 	}
 }
 
@@ -400,13 +400,13 @@ func TestNotifyDigestBatchesMultipleFindingsIntoOneMessage(t *testing.T) {
 	f := newNotifyFixture(t)
 	hook := newFakeWebhook(t)
 	chID := f.createChannel(t, map[string]any{
-		"name":   "汇总推送",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "digest push",
 		"kind":   notify.KindDingTalk,
 		"mode":   db.NotifyModeDigest,
 		"config": map[string]any{"webhook": hook.URL},
 	})
 	for i := 0; i < 3; i++ {
-		f.record(t, fmt.Sprintf("汇总漏洞%d", i+1), "high")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		f.record(t, fmt.Sprintf("Digest Vuln %d", i+1), "high")
 	}
 	ctx := context.Background()
 	if _, _, err := f.pg.FanOutPendingEvents(ctx, 500); err != nil {
@@ -417,22 +417,22 @@ func TestNotifyDigestBatchesMultipleFindingsIntoOneMessage(t *testing.T) {
 	// Not yet due: nothing is sent.
 	f.n.stepDigest(ctx, ch, 50, "")
 	if hook.count() != 0 {
-		t.Fatal("汇总批次未到期就发了")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("digest batch was sent before it was due")
 	}
 
 	// After aging the batch: the three findings combine into one message.
 	f.agePendingBatch(t, chID)
 	f.n.stepDigest(ctx, ch, 50, "")
 	if got := hook.count(); got != 1 {
-		t.Fatalf("三条应汇总成一条消息，实际发了 %d 条", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("three findings should batch into one message, but %d were sent", got)
 	}
 	text := markdownText(t, hook.last(t))
-	if !strings.Contains(text, "continue in the next message") || !strings.Contains(text, "3 vulnerabilities") {
-		t.Fatalf("汇总消息缺少条数/时间窗文案:\n%s", text)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	if !strings.Contains(text, "min: +3 vulnerabilities") { // intro renders "**Last %d min: +%d vulnerabilities**" (notify/markdown.go markdownBatchIntro); window = notify_digest_interval_min, default 30; the "continue in the next message" clause only appears when items are dropped from this message
+		t.Fatalf("digest message missing count/time-window copy:\n%s", text)
 	}
 	for i := 1; i <= 3; i++ {
-		if !strings.Contains(text, fmt.Sprintf("汇总漏洞%d", i)) {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-			t.Fatalf("汇总消息缺少第 %d 条:\n%s", i, text)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		if !strings.Contains(text, fmt.Sprintf("Digest Vuln %d", i)) {
+			t.Fatalf("digest message missing item %d:\n%s", i, text)
 		}
 	}
 	// Deliveries in the same batch should share a batch_id.
@@ -441,7 +441,7 @@ func TestNotifyDigestBatchesMultipleFindingsIntoOneMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	if total != 3 || distinct != 1 {
-		t.Fatalf("三条投递应共享一个 batch_id，得到 distinct=%d total=%d", distinct, total)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("the three deliveries should share one batch_id, got distinct=%d total=%d", distinct, total)
 	}
 }
 
@@ -449,12 +449,12 @@ func TestNotifyDisabledChannelDoesNotSend(t *testing.T) {
 	f := newNotifyFixture(t)
 	hook := newFakeWebhook(t)
 	chID := f.createChannel(t, map[string]any{
-		"name":    "停用渠道",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":    "disabled channel",
 		"kind":    notify.KindDingTalk,
 		"enabled": false,
 		"config":  map[string]any{"webhook": hook.URL},
 	})
-	f.record(t, "停用期间的漏洞", "critical")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	f.record(t, "Finding while disabled", "critical")
 	if _, _, err := f.pg.FanOutPendingEvents(context.Background(), 500); err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +463,7 @@ func TestNotifyDisabledChannelDoesNotSend(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n != 0 {
-		t.Fatalf("停用渠道不该产生投递，得到 %d 条", n)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("a disabled channel should not produce deliveries, got %d", n)
 	}
 }
 
@@ -471,15 +471,15 @@ func TestNotifyStatusChangeDelivery(t *testing.T) {
 	f := newNotifyFixture(t)
 	hook := newFakeWebhook(t)
 	chID := f.createChannel(t, map[string]any{
-		"name":   "状态变更订阅",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "status change subscription",
 		"kind":   notify.KindDingTalk,
 		"config": map[string]any{"webhook": hook.URL},
 		"filter": map[string]any{"on_status_change": true},
 	})
-	finding := f.record(t, "状态变更用例", "high")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	finding := f.record(t, "Status change case", "high")
 	r := f.request("PATCH", fmt.Sprintf("/api/exploration/findings/%d", finding), `{"status":"fixed"}`)
 	if r.Code != 200 {
-		t.Fatalf("改状态失败 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("failed to change status %d: %s", r.Code, r.Body)
 	}
 	f.deliver(t, chID, "")
 
@@ -493,7 +493,7 @@ func TestNotifyStatusChangeDelivery(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("没有收到含「状态变更 → 已修复」的消息（共 %d 条）", hook.count())  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("received no message containing \"Status change\" (%d messages total)", hook.count())
 	}
 }
 
@@ -501,13 +501,13 @@ func TestNotifyStatusChangeSuppressedByDefault(t *testing.T) {
 	f := newNotifyFixture(t)
 	hook := newFakeWebhook(t)
 	chID := f.createChannel(t, map[string]any{
-		"name":   "不订阅状态变更",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "no status change subscription",
 		"kind":   notify.KindDingTalk,
 		"config": map[string]any{"webhook": hook.URL},
 	})
-	finding := f.record(t, "不订阅变更", "high")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	finding := f.record(t, "Unsubscribed change", "high")
 	if r := f.request("PATCH", fmt.Sprintf("/api/exploration/findings/%d", finding), `{"status":"false_positive"}`); r.Code != 200 {
-		t.Fatalf("改状态失败 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("failed to change status %d: %s", r.Code, r.Body)
 	}
 	if _, _, err := f.pg.FanOutPendingEvents(context.Background(), 500); err != nil {
 		t.Fatal(err)
@@ -519,7 +519,7 @@ WHERE d.channel_id=$1 AND e.kind=$2`, chID, notify.EventFindingStatusChanged).Sc
 		t.Fatal(err)
 	}
 	if n != 0 {
-		t.Fatalf("未订阅状态变更的渠道不该收到状态变更投递，得到 %d 条", n)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("a channel not subscribed to status changes should not receive status-change deliveries, got %d", n)
 	}
 }
 
@@ -527,28 +527,28 @@ func TestNotifyTestMessageEndpoint(t *testing.T) {
 	f := newNotifyFixture(t)
 	hook := newFakeWebhook(t)
 	chID := f.createChannel(t, map[string]any{
-		"name":   "测试发送",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "test send",
 		"kind":   notify.KindDingTalk,
 		"config": map[string]any{"webhook": hook.URL},
 	})
 	if r := f.request("POST", fmt.Sprintf("/api/notify/channels/%d/test", chID), ""); r.Code != 200 {
-		t.Fatalf("测试发送失败 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("test send failed %d: %s", r.Code, r.Body)
 	}
 	if hook.count() != 1 {
-		t.Fatalf("假接收端应收到 1 条测试消息，得到 %d", hook.count())  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("the fake receiver should receive 1 test message, got %d", hook.count())
 	}
 	// The test message must be obviously a test and must not be mistaken for a real vulnerability.
-	if text := markdownText(t, hook.last(t)); !strings.Contains(text, "测试") {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		t.Fatalf("测试消息应标明是测试: %s", text)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	if text := markdownText(t, hook.last(t)); !strings.Contains(text, "Test message") {
+		t.Fatalf("test message should be marked as a test: %s", text)
 	}
 	// When the config is broken, the channel's raw error must be reported verbatim to the user.
 	badID := f.createChannel(t, map[string]any{
-		"name":   "坏地址",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "broken address",
 		"kind":   notify.KindDingTalk,
 		"config": map[string]any{"webhook": "http://127.0.0.1:1/hook"},
 	})
 	if r := f.request("POST", fmt.Sprintf("/api/notify/channels/%d/test", badID), ""); r.Code != 502 {
-		t.Fatalf("投递失败应回 502，得到 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("a failed delivery should return 502, got %d: %s", r.Code, r.Body)
 	}
 }
 
@@ -556,11 +556,11 @@ func TestNotifyDeliveriesHistoryAndRetry(t *testing.T) {
 	f := newNotifyFixture(t)
 	// Point at an address that is bound to fail, to manufacture a failed delivery.
 	chID := f.createChannel(t, map[string]any{
-		"name":   "失败重试",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "failure retry",
 		"kind":   notify.KindDingTalk,
 		"config": map[string]any{"webhook": "http://127.0.0.1:1/hook"},
 	})
-	f.record(t, "会失败的推送", "high")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	f.record(t, "Push that will fail", "high")
 	ctx := context.Background()
 	if _, _, err := f.pg.FanOutPendingEvents(ctx, 500); err != nil {
 		t.Fatal(err)
@@ -578,12 +578,12 @@ func TestNotifyDeliveriesHistoryAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if state != db.NotifyStateFailed {
-		t.Fatalf("重试耗尽后应为 failed，得到 %s", state)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("after the retry budget is exhausted the state should be failed, got %s", state)
 	}
 
 	r := f.request("GET", fmt.Sprintf("/api/notify/deliveries?channel_id=%d&state=failed", chID), "")
 	if r.Code != 200 {
-		t.Fatalf("查历史失败 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("failed to query history %d: %s", r.Code, r.Body)
 	}
 	var hist struct {
 		Deliveries []struct {
@@ -599,28 +599,28 @@ func TestNotifyDeliveriesHistoryAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if hist.Total != 1 || len(hist.Deliveries) != 1 {
-		t.Fatalf("应查到 1 条失败投递，得到 total=%d len=%d", hist.Total, len(hist.Deliveries))  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("expected to find 1 failed delivery, got total=%d len=%d", hist.Total, len(hist.Deliveries))
 	}
 	if hist.Deliveries[0].LastError == "" {
-		t.Fatal("历史里应带上失败原因，否则用户无法排查")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("history should carry the failure reason; otherwise the user cannot troubleshoot")
 	}
 	if hist.Deliveries[0].Attempts < db.MaxNotifyAttempts {
-		t.Fatalf("尝试次数应被记录，得到 %d", hist.Deliveries[0].Attempts)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("attempt count should be recorded, got %d", hist.Deliveries[0].Attempts)
 	}
-	if hist.Deliveries[0].Title != "会失败的推送" {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		t.Fatalf("历史应带出漏洞标题，得到 %q", hist.Deliveries[0].Title)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	if hist.Deliveries[0].Title != "Push that will fail" {
+		t.Fatalf("history should carry the finding title, got %q", hist.Deliveries[0].Title)
 	}
 
 	// Manual retry: it should return to pending with the counter reset.
 	if r := f.request("POST", fmt.Sprintf("/api/notify/deliveries/%d/retry", hist.Deliveries[0].ID), ""); r.Code != 200 {
-		t.Fatalf("重发失败 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("manual retry failed %d: %s", r.Code, r.Body)
 	}
 	var attempts int
 	if err := f.pg.QueryRow(`SELECT state, attempts FROM notification_deliveries WHERE id=$1`, hist.Deliveries[0].ID).Scan(&state, &attempts); err != nil {
 		t.Fatal(err)
 	}
 	if state != db.NotifyStatePending || attempts != 0 {
-		t.Fatalf("重发后应为 pending 且 attempts=0，得到 %s/%d", state, attempts)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("after retry the state should be pending with attempts=0, got %s/%d", state, attempts)
 	}
 }
 
@@ -628,7 +628,7 @@ func TestNotifyMetaAndSettingsRoundTrip(t *testing.T) {
 	f := newNotifyFixture(t)
 	r := f.request("GET", "/api/notify/meta", "")
 	if r.Code != 200 {
-		t.Fatalf("meta 失败: %s", r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("meta request failed: %s", r.Body)
 	}
 	var meta struct {
 		Kinds []struct {
@@ -640,27 +640,27 @@ func TestNotifyMetaAndSettingsRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(meta.Kinds) != len(notify.Kinds()) {
-		t.Fatalf("meta 应列出全部 %d 个渠道，得到 %d", len(notify.Kinds()), len(meta.Kinds))  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("meta should list all %d channels, got %d", len(notify.Kinds()), len(meta.Kinds))
 	}
 	for _, k := range meta.Kinds {
 		if len(k.SecretKeys) == 0 {
-			t.Errorf("渠道 %s 未上报凭据字段", k.Kind)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			t.Errorf("channel %s did not report its credential fields", k.Kind)
 		}
 	}
 
 	// Round-trip the three global settings. The trailing slash must be normalized away, otherwise the deep link would come out as "//function/...".
 	if r := f.request("PUT", "/api/settings", `{"notify_public_base_url":"https://artex.example.com/","notify_digest_interval_min":15,"notify_enabled":true}`); r.Code != 200 {
-		t.Fatalf("写设置失败 %d: %s", r.Code, r.Body)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("failed to write settings %d: %s", r.Code, r.Body)
 	}
 	t.Cleanup(func() {
 		f.pg.Exec(`DELETE FROM settings WHERE key IN ($1,$2)`, settingNotifyPublicBaseURL, settingNotifyDigestMinutes)
 	})
 	payload := f.s.settingsPayload()
 	if payload["notify_public_base_url"] != "https://artex.example.com" {
-		t.Fatalf("回链地址未规范化: %v", payload["notify_public_base_url"])  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("public base URL was not normalized: %v", payload["notify_public_base_url"])
 	}
 	if payload["notify_digest_interval_min"] != 15 {
-		t.Fatalf("汇总周期未生效: %v", payload["notify_digest_interval_min"])  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("digest interval did not take effect: %v", payload["notify_digest_interval_min"])
 	}
 
 	// Invalid values must be rejected.
@@ -670,7 +670,7 @@ func TestNotifyMetaAndSettingsRoundTrip(t *testing.T) {
 		`{"notify_digest_interval_min":99999}`,
 	} {
 		if r := f.request("PUT", "/api/settings", body); r.Code != 400 {
-			t.Errorf("%s 应返回 400，得到 %d", body, r.Code)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			t.Errorf("%s should return 400, got %d", body, r.Code)
 		}
 	}
 }
@@ -681,21 +681,21 @@ func TestNotifyDeepLinkUsesPublicBaseURL(t *testing.T) {
 	f := newNotifyFixture(t)
 	hook := newFakeWebhook(t)
 	chID := f.createChannel(t, map[string]any{
-		"name":   "回链",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "deep link",
 		"kind":   notify.KindDingTalk,
 		"config": map[string]any{"webhook": hook.URL},
 	})
-	finding := f.record(t, "带回链的漏洞", "high")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	finding := f.record(t, "Finding with deep link", "high")
 	f.deliver(t, chID, "https://artex.example.com")
 
 	body := hook.last(t)
 	card, _ := body["actionCard"].(map[string]any)
 	if card == nil {
-		t.Fatalf("有回链时应用 ActionCard，得到 msgtype=%v", body["msgtype"])  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("with a deep link an ActionCard should be used, got msgtype=%v", body["msgtype"])
 	}
 	want := fmt.Sprintf("https://artex.example.com/function/findings/detail?id=%d", finding)
 	if card["singleURL"] != want {
-		t.Fatalf("回链不对\n期望 %s\n得到 %v", want, card["singleURL"])  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("wrong deep link\nwant %s\ngot %v", want, card["singleURL"])
 	}
 }
 
@@ -705,19 +705,19 @@ func TestNotifyNoDeepLinkWithoutBaseURL(t *testing.T) {
 	f := newNotifyFixture(t)
 	hook := newFakeWebhook(t)
 	chID := f.createChannel(t, map[string]any{
-		"name":   "无回链",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "no deep link",
 		"kind":   notify.KindDingTalk,
 		"config": map[string]any{"webhook": hook.URL},
 	})
-	f.record(t, "无回链的漏洞", "high")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	f.record(t, "Finding without deep link", "high")
 	f.deliver(t, chID, "")
 
 	body := hook.last(t)
 	if body["msgtype"] != "markdown" {
-		t.Fatalf("未配外部地址时应发 markdown，得到 %v", body["msgtype"])  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("without an external address the message should be markdown, got %v", body["msgtype"])
 	}
-	if text := markdownText(t, body); strings.Contains(text, "查看详情") {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		t.Fatalf("未配外部地址时不该出现详情链接:\n%s", text)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	if text := markdownText(t, body); strings.Contains(text, "View details") {
+		t.Fatalf("no detail link should appear when no external address is configured:\n%s", text)
 	}
 }
 
@@ -735,14 +735,14 @@ func TestNotifyDigestSegmentsAndDefersRemainder(t *testing.T) {
 	hook := newFakeWebhook(t)
 	// Use WeCom: its markdown cap is 4096 bytes, the tightest of the six channels.
 	chID := f.createChannel(t, map[string]any{
-		"name":   "分段汇总",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"name":   "segmented digest",
 		"kind":   notify.KindWeCom,
 		"mode":   db.NotifyModeDigest,
 		"config": map[string]any{"webhook": hook.URL},
 	})
 	const total = 60
 	// Use longer titles so the 60 items far exceed 4096 bytes and segmentation is inevitable.
-	longName := strings.Repeat("超长漏洞名称", 6)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	longName := strings.Repeat("Very long vulnerability name", 6)
 	for i := 0; i < total; i++ {
 		f.record(t, longName+strconv.Itoa(i+1), "high")
 	}
@@ -755,7 +755,7 @@ func TestNotifyDigestSegmentsAndDefersRemainder(t *testing.T) {
 
 	f.n.stepDigest(ctx, ch, 50, "")
 	if hook.count() != 1 {
-		t.Fatalf("应只发出一条消息，得到 %d", hook.count())  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("only one message should be sent, got %d", hook.count())
 	}
 
 	var sent, pending int
@@ -767,17 +767,17 @@ func TestNotifyDigestSegmentsAndDefersRemainder(t *testing.T) {
 		t.Fatal(err)
 	}
 	if sent == 0 {
-		t.Fatal("应有条目被标记为已送达")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("some items should have been marked delivered")
 	}
 	if pending == 0 {
-		t.Fatalf("一批 %d 条不可能全装进 4096 字节，应有剩余待发；sent=%d", total, sent)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("%d items cannot all fit into 4096 bytes in one batch; some should remain pending; sent=%d", total, sent)
 	}
 	if sent+pending != total {
-		t.Fatalf("条目数对不上：sent=%d pending=%d total=%d（既没送达也没待发=丢失）", sent, pending, total)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("item count mismatch: sent=%d pending=%d total=%d (neither delivered nor pending = lost)", sent, pending, total)
 	}
 	// The message body must honestly state how many items were left out of this message.
-	if text := markdownText(t, hook.last(t)); !strings.Contains(text, "其余") {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		t.Fatalf("消息应说明还有条目未包含在本条:\n%.400s", text)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	if text := markdownText(t, hook.last(t)); !strings.Contains(text, "remaining") {
+		t.Fatalf("message should state that items were left out of this message:\n%.400s", text)
 	}
 
 	// Deferred items must not consume the retry budget: attempts was optimistically +1 when claimed, so it must be decremented on deferral.
@@ -787,7 +787,7 @@ WHERE channel_id=$1 AND state=$2`, chID, db.NotifyStatePending).Scan(&maxAttempt
 		t.Fatal(err)
 	}
 	if maxAttempts > 0 {
-		t.Fatalf("被推迟的条目不该消耗重试次数（否则几条之后就会被判失败），得到 attempts=%d", maxAttempts)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("deferred items must not consume retry attempts (otherwise they would be judged failed after a few rounds), got attempts=%d", maxAttempts)
 	}
 
 	// Keep running until it converges. What is asserted is **everything eventually delivered** and that it really
@@ -805,16 +805,16 @@ WHERE channel_id=$1 AND state <> $2 AND state <> $3`, chID, db.NotifyStateSent, 
 		}
 		rounds++
 		if rounds > total+5 {
-			t.Fatalf("分段投递不收敛：跑了 %d 轮仍有 %d 条悬而未决", rounds, undelivered)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			t.Fatalf("segmented delivery does not converge: after %d rounds %d items are still unresolved", rounds, undelivered)
 		}
 		before := hook.count()
 		f.n.stepDigest(ctx, ch, 50, "")
 		if hook.count() == before {
-			t.Fatalf("第 %d 轮没有任何进展，剩余 %d 条会永久卡住", rounds, undelivered)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			t.Fatalf("round %d made no progress; the remaining %d items would be stuck forever", rounds, undelivered)
 		}
 	}
 	if rounds < 2 {
-		t.Fatalf("一条 4096 字节的消息装不下 %d 条长标题漏洞，应分多轮发出，实际只用了 %d 轮", total, rounds)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("a 4096-byte message cannot hold %d long-titled findings; delivery should take multiple rounds but only used %d", total, rounds)
 	}
 	// Every round after the first should be a pure continuation, with no items rejected by the channel.
 	var failed int
@@ -823,7 +823,7 @@ WHERE channel_id=$1 AND state <> $2 AND state <> $3`, chID, db.NotifyStateSent, 
 		t.Fatal(err)
 	}
 	if failed != 0 {
-		t.Fatalf("假接收端始终返回成功，不该有失败条目，得到 %d", failed)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("the fake receiver always returns success; there should be no failed items, got %d", failed)
 	}
 }
 
@@ -836,13 +836,13 @@ WHERE channel_id=$1 AND state <> $2 AND state <> $3`, chID, db.NotifyStateSent, 
 // Asserting the two lengths match exposes such drift in CI.
 func TestNotifyBackoffTableMatchesAttemptBudget(t *testing.T) {
 	if len(notifyBackoff) != db.MaxNotifyAttempts {
-		t.Fatalf("退避档位数(%d)与最大尝试次数(%d)不一致——改一个必须同时改另一个",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("backoff table length (%d) does not match the max attempt count (%d) — changing one requires changing the other",
 			len(notifyBackoff), db.MaxNotifyAttempts)
 	}
 	// Backoff intervals must be monotonically non-decreasing, otherwise retries get more aggressive over time and worsen rate limiting.
 	for i := 1; i < len(notifyBackoff); i++ {
 		if notifyBackoff[i] < notifyBackoff[i-1] {
-			t.Fatalf("退避间隔必须单调不减：第 %d 档 %v < 第 %d 档 %v",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			t.Fatalf("backoff intervals must be monotonically non-decreasing: step %d %v < step %d %v",
 				i, notifyBackoff[i], i-1, notifyBackoff[i-1])
 		}
 	}
@@ -857,24 +857,24 @@ func TestNotifyRateLimitDoesNotConsumeRetryBudget(t *testing.T) {
 	now := time.Now()
 	// One per minute: with a full bucket, at most one.
 	if got := n.takeTokens(1, 1, notifyMaxSendsPerChannelPerTick, now); got != 1 {
-		t.Fatalf("满桶时每分钟 1 条应取 1 个令牌，得到 %d", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("with a full bucket a rate of 1/min should take 1 token, got %d", got)
 	}
 	if got := n.takeTokens(1, 1, notifyMaxSendsPerChannelPerTick, now.Add(time.Millisecond)); got != 0 {
-		t.Fatalf("令牌耗尽后应立即返回 0，得到 %d", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("once tokens are exhausted it should return 0 immediately, got %d", got)
 	}
 	if got := n.takeTokens(1, 1, notifyMaxSendsPerChannelPerTick, now.Add(30*time.Second)); got != 0 {
-		t.Fatalf("半程不应补满一个令牌，得到 %d", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("halfway through the cycle a full token should not be refilled yet, got %d", got)
 	}
 	if got := n.takeTokens(1, 1, notifyMaxSendsPerChannelPerTick, now.Add(time.Minute)); got != 1 {
-		t.Fatalf("满一个周期应补回 1 个令牌，得到 %d", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("after one full cycle 1 token should be refilled, got %d", got)
 	}
 	// Unthrottled channels use a finite cap so one round cannot be held up by unbounded backlog.
 	if got := n.takeTokens(2, 0, notifyUnlimitedBurstPerTick+10, now); got != notifyUnlimitedBurstPerTick {
-		t.Fatalf("不限流应返回每轮上限 %d，得到 %d", notifyUnlimitedBurstPerTick, got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("unthrottled should return the per-round cap %d, got %d", notifyUnlimitedBurstPerTick, got)
 	}
 	// Token buckets are independent across channels.
 	if got := n.takeTokens(1, 1, notifyMaxSendsPerChannelPerTick, now.Add(time.Millisecond)); got != 0 {
-		t.Fatalf("渠道 1 的桶应仍然为空，得到 %d", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("channel 1's bucket should still be empty, got %d", got)
 	}
 }
 
@@ -888,23 +888,23 @@ func TestNotifyTakeTokensKeepsUnusedTokens(t *testing.T) {
 	now := time.Now()
 	// The bucket starts full (100); this round asks for only 5.
 	if got := n.takeTokens(1, 100, 5, now); got != 5 {
-		t.Fatalf("want=5 时应恰好取 5 个令牌，得到 %d", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("with want=5 exactly 5 tokens should be taken, got %d", got)
 	}
 	// Key assertion: the remaining 95 must still be in the bucket, not drained and discarded.
 	// Time is not advanced, so any tokens taken can only come from the existing stock, not from refill.
 	if got := n.takeTokens(1, 100, 95, now); got != 95 {
-		t.Fatalf("剩余令牌应仍可取用（期望 95），得到 %d——桶被整轮抽空了", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("remaining tokens should still be available (expected 95), got %d — the bucket was drained entirely", got)
 	}
 	if got := n.takeTokens(1, 100, 1, now); got != 0 {
-		t.Fatalf("桶已取尽，应返回 0，得到 %d", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("the bucket is empty; should return 0, got %d", got)
 	}
 	// want<=0 must not deduct any tokens (an empty round is free of charge).
 	n2 := &Notifier{buckets: map[int64]*notifyBucket{}}
 	if got := n2.takeTokens(1, 20, 0, now); got != 0 {
-		t.Fatalf("want=0 应返回 0，得到 %d", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("want=0 should return 0, got %d", got)
 	}
 	if got := n2.takeTokens(1, 20, 20, now); got != 20 {
-		t.Fatalf("want=0 的那次不该消耗令牌，应仍可取满 20，得到 %d", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("the want=0 call must not consume tokens; 20 should still be available, got %d", got)
 	}
 }
 
@@ -912,24 +912,24 @@ func TestNotifyTakeTokensKeepsUnusedTokens(t *testing.T) {
 //
 // Once digest batch size is tied to the per-round request budget, a rate_per_min=20 channel can refill only 1 token
 // in each 3-second tick, so every digest message carries just 1 finding — functionally no digest at all, while the
-// message header still says 「近 30 分钟新增 1 个漏洞」. This regression raises no error, and the existing  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+// message header still says "**Last 30 min: +1 vulnerabilities**". This regression raises no error, and the existing
 // end-to-end tests cannot see it either (they pass a big enough limit to stepDigest manually, bypassing the budget
 // calculation in step), so the decision itself is asserted directly here.
 func TestDigestTickPlanDecouplesBatchSizeFromSendBudget(t *testing.T) {
 	tokens, claimLimit := digestTickPlan()
 	// One batch = one message = one request = one token. The token is counted in messages, not findings.
 	if tokens != 1 {
-		t.Fatalf("汇总一批只发一条消息，应恰好消耗 1 个令牌，得到 %d", tokens)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("one digest batch sends one message; it should consume exactly 1 token, got %d", tokens)
 	}
 	if claimLimit != db.MaxDigestBatchSize {
-		t.Fatalf("汇总批次大小应为内存上界 db.MaxDigestBatchSize=%d，得到 %d",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("digest batch size should be the memory cap db.MaxDigestBatchSize=%d, got %d",
 			db.MaxDigestBatchSize, claimLimit)
 	}
 	// Key relation: batch size must be far larger than the per-round request budget. Once they are the same order
 	// of magnitude, it means "how many messages to send" and "how many findings fit in one batch" have been conflated into a single number.
 	if claimLimit <= notifyMaxSendsPerChannelPerTick {
-		t.Fatalf("汇总批次大小 %d 不应受每轮请求预算 %d 约束——"+  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-			"请求预算是由租约倒推的「发几次请求」，与「一批装几条漏洞」是两个量纲",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("digest batch size %d should not be constrained by the per-round request budget %d — "+
+			"the request budget is 'how many requests to send' as back-derived from the lease; 'how many findings fit in one batch' is a different dimension",
 			claimLimit, notifyMaxSendsPerChannelPerTick)
 	}
 }
@@ -943,9 +943,9 @@ func TestDigestTickPlanDecouplesBatchSizeFromSendBudget(t *testing.T) {
 func TestNotifyTickBudgetFitsWithinLease(t *testing.T) {
 	worst := time.Duration(notifyMaxSendsPerChannelPerTick) * notifySendTimeout
 	if worst >= notifyLease {
-		t.Fatalf("单渠道一轮的最坏耗时 %v 不应达到或超过租约 %v"+  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-			"（notifyMaxSendsPerChannelPerTick=%d × notifySendTimeout=%v）——"+
-			"改这三个常量中的任意一个都要同步检查另外两个",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("worst-case per-round time for one channel %v should not reach or exceed the lease %v"+
+			" (notifyMaxSendsPerChannelPerTick=%d × notifySendTimeout=%v) — "+
+			"changing any one of these three constants requires re-checking the other two",
 			worst, notifyLease, notifyMaxSendsPerChannelPerTick, notifySendTimeout)
 	}
 }

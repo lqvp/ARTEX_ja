@@ -18,11 +18,13 @@ import (
 )
 
 func TestValidSkillName(t *testing.T) {
-	ok := []string{"web-recon", "a", "nuclei2", "中文技能", "端口扫描-x", "日本語スキル"} // allowlist: CJK skill-name fixtures
+	ok := []string{"web-recon", "a", "nuclei2", "中文技能", "端口扫描-x", "日本語スキル"} // allowlist: CJK skill-name fixtures exercise Unicode filename handling (valid names kept as-is)
+	// allowlist: CJK invalid-name fixtures exercise Unicode name validation
+	// (embedded space, path separator, bidi override, trailing punctuation)
 	bad := []string{
 		"", "Web-Recon", "-lead", "trail-", "dou--ble", "has space", "中文 技能",
-		"dot.name", "a/b", `a\b`, "..", ".", "中文/技能", "sk\x00ill", "中‮文",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		strings.Repeat("a", 65), "1abc", "中文技能!",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"dot.name", "a/b", `a\b`, "..", ".", "中文/技能", "sk\x00ill", "中‮文",
+		strings.Repeat("a", 65), "1abc", "中文技能!",
 	}
 	for _, n := range ok {
 		if !validSkillName(n) {
@@ -37,13 +39,14 @@ func TestValidSkillName(t *testing.T) {
 }
 
 func TestSkillRelPath(t *testing.T) {
+	// allowlist: CJK path fixtures exercise Unicode relative-path handling (skillRelPath)
 	ok := map[string]string{
 		"SKILL.md":           "SKILL.md",
 		"scripts/run.py":     "scripts/run.py",
-		"参考/中文说明.md":         "参考/中文说明.md",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"参考/中文说明.md":         "参考/中文说明.md",
 		"references/a b.txt": "references/a b.txt",
 		"./SKILL.md":         "SKILL.md",
-		"assets/图片-1_v2.png": "assets/图片-1_v2.png",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"assets/图片-1_v2.png": "assets/图片-1_v2.png",
 	}
 	for in, want := range ok {
 		got, msg := skillRelPath(in)
@@ -51,9 +54,11 @@ func TestSkillRelPath(t *testing.T) {
 			t.Errorf("skillRelPath(%q) = (%q, %q), want (%q, \"\")", in, got, msg, want)
 		}
 	}
+	// allowlist: CJK invalid-path fixtures exercise Unicode path validation
+	// (embedded NBSP U+00A0, bidi override); raw GBK bytes below cover non-UTF-8 rejection
 	bad := []string{
 		"", "../etc/passwd", "a/../../b", "/abs/path", "a//b", `..\..\x`,
-		"%2e%2e/x", "a\x00b", "中文 名.md", "中‮文.md", "a#b.md", "a?b.md",  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		"%2e%2e/x", "a\x00b", "中文\xa0名.md", "中‮文.md", "a#b.md", "a?b.md",
 		"a:b.md", string([]byte{0xd6, 0xd0}) + ".md", // raw GBK bytes: invalid UTF-8
 		strings.Repeat("a", maxSkillPathLen+1),
 	}
@@ -126,26 +131,30 @@ func uploadZip(t *testing.T, skillDir string, filename string, data []byte) (*ht
 	return rr, out
 }
 
-const zhSkillMD = "---\nname: 中文技能\ndescription: 测试\n---\n正文\n" // allowlist: CJK skill-name fixture
+const zhSkillMD = "---\nname: 中文技能\ndescription: test\n---\nbody text\n" // allowlist: CJK skill document fixture exercises Unicode frontmatter handling; the CJK skill name is the asserted value
 
 // A zstd-compressed archive (an optional WinZip compression method) used to blow up with
 // "zip: unsupported compression"; it now installs like any Deflate archive.
 func TestUploadSkillZstdAndChineseNames(t *testing.T) {
 	dir := t.TempDir()
+	// allowlist: CJK zip-entry names exercise Unicode filename handling in a
+	// zstd-compressed archive (incl. the CJK multipart upload filename below)
 	data := buildZip(t,
-		zipFile{name: "中文技能/SKILL.md", body: zhSkillMD, method: zipMethodZstd},  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		zipFile{name: "中文技能/参考/说明 文档.md", body: "参考", method: zipMethodZstd},  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		zipFile{name: "中文技能/scripts/run.py", body: "print(1)", method: zip.Deflate},  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		zipFile{name: "中文技能/SKILL.md", body: zhSkillMD, method: zipMethodZstd},
+		zipFile{name: "中文技能/参考/说明 文档.md", body: "reference", method: zipMethodZstd},
+		zipFile{name: "中文技能/scripts/run.py", body: "print(1)", method: zip.Deflate},
 	)
-	rr, out := uploadZip(t, dir, "中文技能.zip", data)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	rr, out := uploadZip(t, dir, "中文技能.zip", data)
 	if rr.Code != 201 {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body)
 	}
-	if out["name"] != "中文技能" { // allowlist: CJK skill-name fixture
-		t.Fatalf("name = %v, want 中文技能", out["name"]) // allowlist: CJK skill-name fixture
+	// allowlist: the expected name and extracted paths are the CJK zip fixture
+	// under test (Unicode filename handling)
+	if out["name"] != "中文技能" {
+		t.Fatalf("name = %v, want 中文技能", out["name"])
 	}
 	for _, rel := range []string{"SKILL.md", "参考/说明 文档.md", "scripts/run.py"} {
-		if _, err := os.Stat(filepath.Join(dir, "中文技能", rel)); err != nil {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		if _, err := os.Stat(filepath.Join(dir, "中文技能", rel)); err != nil {
 			t.Errorf("missing extracted file %q: %v", rel, err)
 		}
 	}
@@ -162,17 +171,22 @@ func TestUploadSkillGBKNames(t *testing.T) {
 		return b
 	}
 	dir := t.TempDir()
+	// allowlist: GBK-encoded non-UTF-8 zip-entry names exercise legacy
+	// Chinese-Windows archive decoding (7-Zip / File Explorer style archives)
 	data := buildZip(t,
-		zipFile{name: gbk("中文技能/SKILL.md"), body: zhSkillMD, method: zip.Deflate, nonUTF8: true},  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		zipFile{name: gbk("中文技能/参考资料.md"), body: "内容", method: zip.Deflate, nonUTF8: true},  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		zipFile{name: gbk("中文技能/SKILL.md"), body: zhSkillMD, method: zip.Deflate, nonUTF8: true},
+		zipFile{name: gbk("中文技能/参考资料.md"), body: "content", method: zip.Deflate, nonUTF8: true},
 	)
 	rr, out := uploadZip(t, dir, "skill.zip", data)
 	if rr.Code != 201 {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body)
 	}
-	if out["name"] != "中文技能" { // allowlist: CJK skill-name fixture
-		t.Fatalf("name = %v, want 中文技能", out["name"]) // allowlist: CJK skill-name fixture
+	// allowlist: the expected name is the GBK-decoded CJK fixture under test
+	// (non-UTF-8 filename handling)
+	if out["name"] != "中文技能" {
+		t.Fatalf("name = %v, want 中文技能", out["name"])
 	}
+	// allowlist: the GBK-decoded entry must extract under its decoded CJK directory
 	if _, err := os.Stat(filepath.Join(dir, "中文技能", "参考资料.md")); err != nil {
 		t.Errorf("GBK-named entry not extracted: %v", err)
 	}
@@ -235,9 +249,11 @@ func TestUploadSkillRejectsTraversal(t *testing.T) {
 }
 
 func TestSkillNameFromFrontmatterQuoted(t *testing.T) {
-	got := skillNameFromFrontmatter([]byte("---\nname: \"中文技能\"\ndescription: x\n---\n"))  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-	if got != "中文技能" {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
-		t.Fatalf("name = %q, want 中文技能", got)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	// allowlist: quoted CJK skill-name fixture exercises Unicode frontmatter
+	// name parsing; the CJK name is the value under test
+	got := skillNameFromFrontmatter([]byte("---\nname: \"中文技能\"\ndescription: x\n---\n"))
+	if got != "中文技能" {
+		t.Fatalf("name = %q, want 中文技能", got)
 	}
 }
 

@@ -52,10 +52,10 @@ VALUES(?,?,?,'GET','/x','http://x/x',200,'text/html',0,9,?)`, row[0], 1700000000
 			t.Fatal(err)
 		}
 		if _, err := old.Exec(`INSERT INTO exchange_bodies(id,req_head,req_body,resp_head,resp_body)
-VALUES(?,'GET /x','','HTTP 200','老数据正文')`, row[0]); err != nil {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+VALUES(?,'GET /x','','HTTP 200','legacy body text')`, row[0]); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := old.Exec(`INSERT INTO ex_fts(rowid,content) VALUES(?,?)`, i+1, "老数据正文 secret-token"); err != nil {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		if _, err := old.Exec(`INSERT INTO ex_fts(rowid,content) VALUES(?,?)`, i+1, "legacy body text secret-token"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -70,55 +70,55 @@ VALUES(?,'GET /x','','HTTP 200','老数据正文')`, row[0]); err != nil {  // a
 	// ---- new version takes over
 	tr, err := Open(dir, "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("新版本无法打开旧库: %v", err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("new version cannot open legacy database: %v", err)
 	}
 	defer tr.Close()
 
 	// 1. Must be the same file; must not quietly open a new empty database
 	if st2, err := os.Stat(path); err != nil || st2.Size() == 0 {
-		t.Fatalf("原索引文件异常: size=%v err=%v", st2, err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("original index file abnormal: size=%v err=%v", st2, err)
 	}
 	if entries, _ := os.ReadDir(filepath.Join(dir, "_index")); len(entries) > 3 {
 		for _, e := range entries {
-			t.Logf("_index 下: %s", e.Name())  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			t.Logf("under _index: %s", e.Name())
 		}
-		t.Fatal("_index 下出现了预期外的文件，DSN 可能指向了别的库")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("unexpected file under _index; the DSN may point at a different database")
 	}
-	t.Logf("旧库 %d 字节，新版本接管后仍是同一文件", stat.Size())  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	t.Logf("legacy database is %d bytes; still the same file after the new version took over", stat.Size())
 
 	// 2. All historical data must be visible
 	n, err := tr.Count()
 	if err != nil || n != 3 {
-		t.Fatalf("Count=(%d,%v)，应为 (3,nil) —— 历史流量丢失", n, err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("Count=(%d,%v), want (3,nil); historical traffic lost", n, err)
 	}
 	// 3. Historical full-text index must still be searchable
 	if tr.fts {
 		rows, err := tr.query("old.example.com", "", "secret-token", 0, 10)
 		if err != nil {
-			t.Fatalf("历史全文搜索失败: %v", err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			t.Fatalf("legacy full-text search failed: %v", err)
 		}
 		if len(rows) != 2 {
-			t.Fatalf("历史全文搜索命中 %d 条，应为 2", len(rows))  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			t.Fatalf("legacy full-text search hit %d rows, want 2", len(rows))
 		}
 	}
 	// 4. Historical body must still be readable
 	if _, resp, err := tr.Get("1700000000-0001"); err != nil {
-		t.Fatalf("读取历史正文失败: %v", err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("failed to read legacy body: %v", err)
 	} else if resp == "" {
-		t.Fatal("历史响应为空")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("legacy response is empty")
 	}
 	// 5. Legacy DB must not be mistaken for incremental-vacuum enabled
 	if tr.incrementalVacuum {
-		t.Fatal("旧库被误判为已启用增量回收")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("legacy database misdetected as having incremental vacuum enabled")
 	}
 	// 6. Deletion must still work, and the reaping flow must converge on the legacy DB
 	deleted, err := tr.DeleteHostsExact([]string{"old.example.com"})
 	if err != nil || deleted != 2 {
-		t.Fatalf("DeleteHostsExact=(%d,%v)，应为 (2,nil)", deleted, err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("DeleteHostsExact=(%d,%v), want (2,nil)", deleted, err)
 	}
 	tr.reaping.Wait()
 	if n, err := tr.Count(); err != nil || n != 1 {
-		t.Fatalf("删除后 Count=(%d,%v)，应为 (1,nil)", n, err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("Count after deletion=(%d,%v), want (1,nil)", n, err)
 	}
 	// 7. legacy path<>'' rows must not be affected
 	var legacyPath string
@@ -126,7 +126,7 @@ VALUES(?,'GET /x','','HTTP 200','老数据正文')`, row[0]); err != nil {  // a
 		t.Fatal(err)
 	}
 	if legacyPath == "" {
-		t.Fatal("legacy 行的 path 被清空了")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("the legacy row's path was cleared")
 	}
 }
 
@@ -141,7 +141,7 @@ func TestDowngradeToOldBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !tr.incrementalVacuum {
-		t.Fatal("新库应启用增量回收")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatal("new database should enable incremental vacuum")
 	}
 	bulkRecord(tr, "keep.example.com", 5, 100*1024)
 	if err := tr.Close(); err != nil {
@@ -152,14 +152,14 @@ func TestDowngradeToOldBinary(t *testing.T) {
 	defer old.Close()
 	var n int
 	if err := old.QueryRow(`SELECT COUNT(*) FROM exchanges`).Scan(&n); err != nil || n != 5 {
-		t.Fatalf("旧版本读到 (%d,%v)，应为 (5,nil)", n, err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("old binary read (%d,%v), want (5,nil)", n, err)
 	}
 	if _, err := old.Exec(`INSERT INTO exchanges(id,ts,host,method,url_template,url,status,content_type,req_len,resp_len,path)
 VALUES('x',1,'new.example.com','GET','/x','http://x/x',200,'',0,0,'')`); err != nil {
-		t.Fatalf("旧版本写入失败: %v", err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("old binary write failed: %v", err)
 	}
 	if _, err := old.Exec(`DELETE FROM exchanges WHERE host='keep.example.com'`); err != nil {
-		t.Fatalf("旧版本删除失败: %v", err)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		t.Fatalf("old binary delete failed: %v", err)
 	}
 }
 

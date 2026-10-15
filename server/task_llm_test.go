@@ -117,7 +117,7 @@ func TestIsQuotaExhaustedError(t *testing.T) {
 		`billing_hard_limit_reached`,
 		`billing_not_active`,
 		`HTTP status 402 Payment Required`,
-		`账户余额不足，请充值`, // CJK quota marker fixture: production agent.IsQuotaExhaustedMessage preserves Chinese balance markers  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		`账户余额不足，请充值`, // allowlist: production preserve — server isQuotaExhaustedError delegates to agent.IsQuotaExhaustedMessage, whose Chinese balance-exhaustion detection keys (agent/provider.go:310) match this gateway message
 		`credit balance is too low`,
 	}
 	for _, message := range positive {

@@ -19,23 +19,25 @@ import (
 )
 
 func TestChatMentionParsing(t *testing.T) {
-	refs, err := parseChatMentions("analyze @[漏洞#12 same name] and @[接口#34 GET /api] @[漏洞#12 duplicate] user@example.com @漏洞")  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	// allowlist: mention-kind tokens throughout this test match the production
+	// chatMentionPattern/chatMentionKinds wire format (server/chat_mentions.go)
+	refs, err := parseChatMentions("analyze @[漏洞#12 same name] and @[接口#34 GET /api] @[漏洞#12 duplicate] user@example.com @漏洞")
 	if err != nil || len(refs) != 2 || refs[0].Kind != "finding" || refs[1].ID != 34 {
 		t.Fatalf("refs=%+v err=%v", refs, err)
 	}
-	for _, msg := range []string{"@[漏洞#0]", "@[漏洞#999999999999999999999999]"} {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	for _, msg := range []string{"@[漏洞#0]", "@[漏洞#999999999999999999999999]"} {
 		if _, err := parseChatMentions(msg); err == nil {
 			t.Fatalf("accepted %q", msg)
 		}
 	}
 	var msg strings.Builder
 	for i := 1; i <= 11; i++ {
-		fmt.Fprintf(&msg, "@[资产#%d] ", i)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		fmt.Fprintf(&msg, "@[资产#%d] ", i)
 	}
 	if _, err := parseChatMentions(msg.String()); err == nil {
 		t.Fatal("accepted more than 10 references")
 	}
-	if actual, err := composeChatMentionMessage(nil, "plain message user@example.com @漏洞"); err != nil || actual != "plain message user@example.com @漏洞" {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	if actual, err := composeChatMentionMessage(nil, "plain message user@example.com @漏洞"); err != nil || actual != "plain message user@example.com @漏洞" {
 		t.Fatalf("plain chat changed: %s %v", actual, err)
 	}
 }
@@ -162,7 +164,9 @@ func TestChatMentionWorkerReceivesServerDetails(t *testing.T) {
 		s.sendWorkerMessage(w, r)
 		return w
 	}
-	if w := send("@[漏洞#9223372036854775807]"); w.Code != 400 {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	// allowlist: mention-kind tokens in this test match the production chatMentionKinds
+	// wire format (server/chat_mentions.go)
+	if w := send("@[漏洞#9223372036854775807]"); w.Code != 400 {
 		t.Fatalf("invalid ref accepted: %d %s", w.Code, w.Body)
 	}
 	node, _ := task.Store.GetNode(iid)
@@ -170,7 +174,7 @@ func TestChatMentionWorkerReceivesServerDetails(t *testing.T) {
 	if node.State != "paused" || len(items) != 0 {
 		t.Fatal("invalid reference started worker or persisted a turn")
 	}
-	message := fmt.Sprintf("verify @[漏洞#%d test]", fid)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	message := fmt.Sprintf("verify @[漏洞#%d test]", fid)
 	if w := send(message); w.Code != 200 {
 		t.Fatalf("send: %d %s", w.Code, w.Body)
 	}
@@ -234,7 +238,10 @@ func TestChatMentionCatalogAndContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	var refs strings.Builder
-	fmt.Fprintf(&refs, "analyze @[漏洞#%d client forged title] @[企业#%d company] ", fid, cid)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	// allowlist: mention-kind tokens throughout this test match the production
+	// chatMentionPattern/chatMentionKinds wire format; the bare "asset" ref kind
+	// below is a chatMentionKinds key (server/chat_mentions.go)
+	fmt.Fprintf(&refs, "analyze @[漏洞#%d client forged title] @[企业#%d company] ", fid, cid)
 	for _, kind := range []string{"root_domain", "subdomain", "ip", "app", "service", "endpoint"} {
 		var id int64
 		if err := pg.QueryRow(`INSERT INTO assets(type,company_id,domain,ip,app_name,url,method,extra)
@@ -255,10 +262,10 @@ func TestChatMentionCatalogAndContext(t *testing.T) {
 			t.Fatalf("search %s: %+v %v", kind, items, err)
 		}
 		if kind == "ip" {
-			if _, err := composeChatMentionMessage(pg, fmt.Sprintf("@[应用#%d]", id)); err == nil {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			if _, err := composeChatMentionMessage(pg, fmt.Sprintf("@[应用#%d]", id)); err == nil {
 				t.Fatal("accepted mismatched type")
 			}
-			if data, err := loadChatMention(pg, chatMentionRef{"asset", id, "资产"}); err != nil || data == nil {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+			if data, err := loadChatMention(pg, chatMentionRef{"asset", id, "资产"}); err != nil || data == nil {
 				t.Fatalf("generic asset: %v", err)
 			}
 		}
@@ -275,7 +282,7 @@ func TestChatMentionCatalogAndContext(t *testing.T) {
 			t.Errorf("context missing %s", want)
 		}
 	}
-	if _, err := composeChatMentionMessage(pg, "@[漏洞#9223372036854775807]"); err == nil {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	if _, err := composeChatMentionMessage(pg, "@[漏洞#9223372036854775807]"); err == nil {
 		t.Fatal("accepted missing record")
 	}
 	for _, kind := range []string{"finding", "company", "asset", ""} {
@@ -314,7 +321,9 @@ func TestChatMentionConversationReceivesServerDetails(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { waitRetestIdle(t, s); _, _ = s.m.pg.Exec(`DELETE FROM conversations WHERE id=$1`, c.ID) })
-	message := fmt.Sprintf("please view @[漏洞#%d example]", fid)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	// allowlist: mention-kind tokens in this test match the production chatMentionKinds
+	// wire format (server/chat_mentions.go)
+	message := fmt.Sprintf("please view @[漏洞#%d example]", fid)
 	body, _ := json.Marshal(map[string]any{"message": message})
 	w := retestRequest(s.pgSendConversationMessage, http.MethodPost, c.ID, string(body))
 	if w.Code != 202 {
@@ -340,7 +349,7 @@ func TestChatMentionConversationReceivesServerDetails(t *testing.T) {
 	if !foundUser || !foundResult {
 		t.Fatalf("turn incomplete: user=%v result=%v", foundUser, foundResult)
 	}
-	w = retestRequest(s.pgSendConversationMessage, http.MethodPost, c.ID, `{"message":"@[漏洞#9223372036854775807]"}`)  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+	w = retestRequest(s.pgSendConversationMessage, http.MethodPost, c.ID, `{"message":"@[漏洞#9223372036854775807]"}`)
 	if w.Code != 400 {
 		t.Fatalf("missing ref send: %d %s", w.Code, w.Body)
 	}

@@ -111,7 +111,7 @@ func TestWorkerReviewContextAcrossToolCalls(t *testing.T) {
 		// (全局探索态势 — main-agent global overview wording) stays in the forbidden list on
 		// purpose: it guards against that phrase leaking into worker review prompts, and is
 		// retained for legacy compatibility.
-		for _, forbidden := range []string{"create and clean up", "PARENT_BACKGROUND_SENTINEL", `"background"`, "operate only in the isolated test directory", "verify creation and cleanup", "no subsequent cleanup", "FULL_INTENT_SENTINEL", "全局探索态势", `"task_id"`, `"task"`, `"turn_input"`, `"worker_intent"`, `"history"`, `"history_truncated"`, `"correlation"`, "Created a new fixture"} {  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
+		for _, forbidden := range []string{"create and clean up", "PARENT_BACKGROUND_SENTINEL", `"background"`, "operate only in the isolated test directory", "verify creation and cleanup", "no subsequent cleanup", "FULL_INTENT_SENTINEL", "全局探索态势", `"task_id"`, `"task"`, `"turn_input"`, `"worker_intent"`, `"history"`, `"history_truncated"`, `"correlation"`, "Created a new fixture"} { // allowlist: legacy pre-translation prompt phrase kept to guard against leaking main-agent global-overview wording into worker review inputs (rationale above)
 			if strings.Contains(string(raw), forbidden) {
 				t.Fatalf("unexpected review data: %s", forbidden)
 			}

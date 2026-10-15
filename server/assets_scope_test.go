@@ -15,6 +15,7 @@ import (
 
 func TestCompanyScopeInputsAcceptStructuredAndLegacyRules(t *testing.T) {
 	var inputs companyScopeInputs
+	// allowlist: ICP fixture exercises production 备案-keyed CJK scope normalization (db/company_scope.go)
 	if err := json.Unmarshal([]byte(`[
 		"example.com",
 		{"kind":"icp","value":"京 ICP备 123号"},
@@ -137,7 +138,7 @@ func TestCompanyScopeHTTPErrorClassificationAndBounds(t *testing.T) {
 		body, err := json.Marshal(map[string]any{
 			"name": "Oversized Scope",
 			"scope": []map[string]string{{
-				"kind": "keyword", "value": strings.Repeat("界", db.MaxCompanyScopeRawRunes+1), // allowlist: CJK rune-count fixture
+				"kind": "keyword", "value": strings.Repeat("界", db.MaxCompanyScopeRawRunes+1), // allowlist: byte-budget fixture — a repeated multi-byte CJK rune exercises the rune-count scope limit (db.MaxCompanyScopeRawRunes), so the text itself is not translatable
 			}},
 		})
 		if err != nil {
