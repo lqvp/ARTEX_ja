@@ -24,7 +24,11 @@ func TestIsQuotaExhaustedMessage(t *testing.T) {
 		`You exceeded your current quota, please check your plan and billing details.`,
 		`billing_not_active`,
 		`credit balance is too low`,
-		`账户余额不足，请充值`,
+		// allowlist: Chinese-language gateway quota marker kept on purpose — it exercises
+		// the Chinese detection keys that IsQuotaExhaustedMessage deliberately preserves
+		// (agent/provider.go markers list, Task-15 preserve) for Chinese-language
+		// provider/gateway error messages.
+		`账户余额不足，请充值`,  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
 	}
 	for _, message := range positive {
 		if !IsQuotaExhaustedMessage(message) {
@@ -129,3 +133,4 @@ func TestProviderDoesNotRetryExplicitQuota429(t *testing.T) {
 		t.Fatalf("explicit quota request retried %d times, want exactly one request", got)
 	}
 }
+

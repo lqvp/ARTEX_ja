@@ -12,10 +12,16 @@ export function StatTile({ label, value, hint, tone }: { label: string; value: s
   );
 }
 
-// formatBacklog 把积压毫秒数渲染成人看得懂的量级。
-export function formatBacklog(ms: number): string {
+// formatBacklog renders the backlog age in milliseconds at a human-readable
+// magnitude. Unit strings live in the `notify` catalog, so callers pass their
+// `useTranslations("notify")` translator in (same t-as-argument pattern as
+// statusLabel in lib/status.ts).
+export function formatBacklog(
+  ms: number,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
   if (!ms) return "—";
-  if (ms < 60_000) return `${Math.round(ms / 1000)} 秒`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)} 分钟`;
-  return `${(ms / 3_600_000).toFixed(1)} 小时`;
+  if (ms < 60_000) return t("unitSeconds", { value: Math.round(ms / 1000) });
+  if (ms < 3_600_000) return t("unitMinutes", { value: Math.round(ms / 60_000) });
+  return t("unitHours", { value: (ms / 3_600_000).toFixed(1) });
 }

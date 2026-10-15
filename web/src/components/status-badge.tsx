@@ -1,11 +1,16 @@
-import { cn } from "@/lib/utils";
+"use client";
+
+import { useTranslations } from "next-intl";
+
 import {
+  statusLabel,
   statusMeta,
   toneClasses,
   toneDot,
   type StatusDomain,
   type Tone,
 } from "@/lib/status";
+import { cn } from "@/lib/utils";
 
 export function StatusBadge({
   domain,
@@ -18,6 +23,7 @@ export function StatusBadge({
   dot?: boolean;
   className?: string;
 }) {
+  const t = useTranslations("status");
   const meta = statusMeta(domain, value);
   return (
     <span
@@ -30,7 +36,7 @@ export function StatusBadge({
       {dot && (
         <span className={cn("size-1.5 rounded-full", toneDot[meta.tone])} />
       )}
-      {meta.label}
+      {statusLabel(domain, value, t)}
     </span>
   );
 }

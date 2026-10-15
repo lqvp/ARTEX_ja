@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { sseUrl } from "@/lib/api";
 import { isBtwCommand, type SideExchange, type SideHistory, sideAPI } from "@/lib/side-questions";
 
-// crypto.randomUUID 仅在安全上下文可用(https/localhost);经 IP+http 访问时降级。
+// crypto.randomUUID is only available in secure contexts (https/localhost); it degrades
+// when the site is accessed over plain IP+http.
 function newSideRequestID(): string {
   return (
     globalThis.crypto?.randomUUID?.() ?? `btw-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
@@ -23,6 +25,7 @@ function merge(old: SideExchange[], incoming: SideExchange[]) {
 }
 
 export function useSideQuestions(parent: string | null) {
+  const t = useTranslations("common");
   const [stateParent, setStateParent] = useState(parent);
   const current = stateParent === parent;
   const [open, setOpen] = useState(false);
@@ -124,7 +127,7 @@ export function useSideQuestions(parent: string | null) {
     return () => clearInterval(timer);
   }, [open, parent, load]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Reconnect after a clear attempt invalidates older callbacks.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Reconnect after a clear attempt invalidates older callbacks; the next-intl translator is memo-stable per locale, so t is omitted deliberately.
   useEffect(() => {
     if (!runningID) return;
     const version = epoch.current;
@@ -138,7 +141,7 @@ export function useSideQuestions(parent: string | null) {
         restoreFailedDraft([item]);
         if (item.status !== "running") stream.close();
       } catch {
-        setError("旁路数据解析失败，请重新打开面板");
+        setError(t("sideParseFailed"));
       }
     });
     stream.addEventListener("cleared", () => {

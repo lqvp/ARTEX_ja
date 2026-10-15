@@ -117,7 +117,7 @@ func TestIsQuotaExhaustedError(t *testing.T) {
 		`billing_hard_limit_reached`,
 		`billing_not_active`,
 		`HTTP status 402 Payment Required`,
-		`账户余额不足，请充值`,
+		`账户余额不足，请充值`, // CJK quota marker fixture: production agent.IsQuotaExhaustedMessage preserves Chinese balance markers  // allowlist: ordinary Chinese fixture/message text retained; see Task-16 plan
 		`credit balance is too low`,
 	}
 	for _, message := range positive {
@@ -713,3 +713,4 @@ func TestProfileDeleteRestoresQuotaBlockedIntentWhenFallbackAvailable(t *testing
 		t.Fatalf("task did not return to fallback state: %+v", state)
 	}
 }
+

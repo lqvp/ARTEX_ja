@@ -5,6 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 
 import { ArrowDownIcon, ArrowUpIcon, ArrowUpRightIcon, ChevronRightIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { StatusBadge } from "@/components/status-badge";
@@ -13,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { useStoredSortPreference } from "@/lib/sort-preference";
-import { statusMeta } from "@/lib/status";
+import { statusLabel } from "@/lib/status";
 import type { Finding, FindingStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -22,10 +23,14 @@ type FindingSortField = "time";
 const FINDING_SORT_FIELDS: readonly FindingSortField[] = ["time"];
 const FINDING_SORT_PREFERENCE_KEY = "artex_task_findings_sort";
 
-function findingLabel(finding: Finding): string {
+// The fallback is passed as a pre-computed translated string (call sites pass
+// td("unclassified")) instead of a translator parameter: the catalog checker resolves
+// helper parameters against the lexically nearest useTranslations binding, which made a
+// t: Translate parameter ambiguous with this file's status translator.
+function findingLabel(finding: Finding, fallback: string): string {
   if (finding.name?.trim()) return finding.name;
   if (finding.vulnclass?.trim()) return finding.vulnclass;
-  return "未分类";
+  return fallback;
 }
 
 const FINDING_STATUSES: FindingStatus[] = [
@@ -50,6 +55,8 @@ function Row({
   onStatus: (f: Finding, next: FindingStatus) => void;
 }) {
   const [open, setOpen] = React.useState(false);
+  const t = useTranslations("status");
+  const td = useTranslations("tasksDetail");
   return (
     <div className="border-b last:border-b-0">
       <div className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-accent/40">
@@ -64,17 +71,17 @@ function Row({
           <StatusBadge domain="severity" value={f.severity} dot />
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-medium">{findingLabel(f)}</span>
+              <span className="truncate font-medium">{findingLabel(f, td("unclassified"))}</span>
               {f.inherited && f.source_task_id && (
                 <Badge variant="outline" className="shrink-0">
-                  来源 #{f.source_task_id} · 只读
+                  {td("sourceReadonlyBadge", { id: f.source_task_id })}
                 </Badge>
               )}
             </div>
             <span className="truncate text-xs text-muted-foreground">{f.summary}</span>
           </div>
         </button>
-        <Badge variant="outline">流量证据 {f.traffic_count ?? 0} 条</Badge>
+        <Badge variant="outline">{td("trafficEvidence", { n: f.traffic_count ?? 0 })}</Badge>
         {f.assets && f.assets.length > 0 && (
           <div className="hidden shrink-0 flex-wrap justify-end gap-1 sm:flex">
             {f.assets.slice(0, 2).map((a) => (
@@ -98,7 +105,7 @@ function Row({
               <SelectGroup>
                 {FINDING_STATUSES.map((st) => (
                   <SelectItem key={st} value={st}>
-                    {statusMeta("finding", st).label}
+                    {statusLabel("finding", st, t)}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -118,16 +125,16 @@ function Row({
                 : `/function/findings/detail?id=${f.finding_id}`
             }
             className="text-muted-foreground hover:text-primary inline-flex shrink-0 items-center gap-0.5 text-xs"
-            title="查看漏洞详情"
+            title={td("viewFindingDetail")}
           >
-            详情
+            {td("findingDetails")}
             <ArrowUpRightIcon className="size-3" />
           </Link>
         )}
       </div>
       {open && (
         <div className="bg-muted/30 px-4 pb-4 pl-11">
-          <div className="mb-1 text-xs font-medium text-muted-foreground">证据 / PoC</div>
+          <div className="mb-1 text-xs font-medium text-muted-foreground">{td("evidencePoc")}</div>
           <pre className="overflow-auto rounded-md border bg-background p-3 font-mono text-xs whitespace-pre-wrap">
             {f.evidence}
           </pre>
@@ -145,6 +152,8 @@ export function FindingsTab({ taskId }: { taskId: string }) {
     "time",
     "desc",
   );
+  const t = useTranslations("status");
+  const td = useTranslations("tasksDetail");
 
   React.useEffect(() => {
     let active = true;
@@ -159,10 +168,10 @@ export function FindingsTab({ taskId }: { taskId: string }) {
         });
     };
     load();
-    const t = setInterval(load, 3000);
+    const pollTimer = setInterval(load, 3000);
     return () => {
       active = false;
-      clearInterval(t);
+      clearInterval(pollTimer);
     };
   }, [taskId]);
 
@@ -172,12 +181,12 @@ export function FindingsTab({ taskId }: { taskId: string }) {
     setFindings((cur) => cur.map((x) => (x.id === f.id ? { ...x, status: next } : x)));
     try {
       await api.setFindingStatus(f.finding_id, next);
-      toast.success(`已标记为「${statusMeta("finding", next).label}」`);
+      toast.success(t("markedAs", { label: statusLabel("finding", next, t) }));
     } catch (e) {
       setFindings((cur) => cur.map((x) => (x.id === f.id ? { ...x, status: prev } : x)));
-      toast.error("更新失败：" + (e as Error).message);
+      toast.error(td("toastUpdateFail", { message: (e as Error).message }));
     }
-  }, []);
+  }, [t, td]);
 
   const items = findings
     .filter((f) => f.task_id === taskId || f.inherited)
@@ -191,11 +200,11 @@ export function FindingsTab({ taskId }: { taskId: string }) {
     <Card className="overflow-hidden py-0">
       <CardContent className="px-0">
         <div className="flex items-center border-b px-4 py-2 text-xs text-muted-foreground">
-          <span className="min-w-0 flex-1">漏洞</span>
+          <span className="min-w-0 flex-1">{td("findingsColumn")}</span>
           <button
             type="button"
             className="inline-flex items-center gap-1 outline-none focus-visible:underline"
-            aria-label={`发现时间当前${sortPreference.direction === "asc" ? "正序" : "倒序"}，点击切换排序方向`}
+            aria-label={td(sortPreference.direction === "asc" ? "sortTimeAscHint" : "sortTimeDescHint")}
             onClick={() =>
               setSortPreference((current) => ({
                 field: "time",
@@ -203,7 +212,7 @@ export function FindingsTab({ taskId }: { taskId: string }) {
               }))
             }
           >
-            <span>发现时间</span>
+            <span>{td("discoveredAt")}</span>
             {sortPreference.direction === "asc" ? (
               <ArrowUpIcon className="size-3.5" />
             ) : (
@@ -215,7 +224,7 @@ export function FindingsTab({ taskId }: { taskId: string }) {
           <Row key={f.id} f={f} contextTaskId={taskId} onStatus={onStatus} />
         ))}
         {items.length === 0 && (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">本任务及直接关联任务暂无确认发现。</p>
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">{td("emptyTaskFindings")}</p>
         )}
       </CardContent>
     </Card>

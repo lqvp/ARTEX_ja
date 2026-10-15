@@ -15,6 +15,7 @@ import {
   ZapIcon,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Tooltip as RechartsTooltip, XAxis, YAxis } from "recharts";
+import { useTranslations } from "next-intl";
 
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -41,26 +42,21 @@ import type {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// ── chart constants ───────────────────────────────────────────────────────────
-
-const dailyTrendConfig = {
-  input: { label: "输入", color: "hsl(217 91% 60%)" },
-  output: { label: "输出", color: "hsl(263 70% 60%)" },
-  cacheRead: { label: "缓存读", color: "hsl(160 60% 45%)" },
-} satisfies ChartConfig;
-
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function fmtRel(ts?: string | number): string {
+/** Localized unit labels for relative timestamps; the `{n}` slot holds the value. */
+type AgoLabels = { s: string; m: string; h: string; d: string };
+
+function fmtRel(ts: string | number | undefined, ago: AgoLabels): string {
   if (!ts) return "—";
   const ms = Date.now() - (typeof ts === "number" ? ts * 1000 : Date.parse(ts as string));
   const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s 前`;
+  if (s < 60) return ago.s.replace("{n}", String(s));
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m 前`;
+  if (m < 60) return ago.m.replace("{n}", String(m));
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h 前`;
-  return `${Math.floor(h / 24)}d 前`;
+  if (h < 24) return ago.h.replace("{n}", String(h));
+  return ago.d.replace("{n}", String(Math.floor(h / 24)));
 }
 
 function fmtTokens(n: number): string {
@@ -68,15 +64,6 @@ function fmtTokens(n: number): string {
   if (n >= 1000) return (n / 1000).toFixed(1) + "k";
   return String(n);
 }
-
-const ASSET_TYPE_LABELS: Record<string, string> = {
-  root_domain: "根域名",
-  ip: "IP",
-  subdomain: "子域名",
-  app: "应用",
-  service: "服务",
-  endpoint: "端点",
-};
 
 const ASSET_COLORS: Record<string, string> = {
   root_domain: "bg-blue-500",
@@ -130,7 +117,22 @@ function SectionTitle({
 // ── page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  // data state
+  const t = useTranslations("dashboard");
+  const tc = useTranslations("common");
+
+  // Localized chart labels must be built at render time, so the chart config
+  // lives inside the component rather than at module level.
+  const dailyTrendConfig = {
+    input: { label: t("trendInput"), color: "hsl(217 91% 60%)" },
+    output: { label: t("trendOutput"), color: "hsl(263 70% 60%)" },
+    cacheRead: { label: t("cacheHit"), color: "hsl(160 60% 45%)" },
+  } satisfies ChartConfig;
+
+  // t.raw: the values hold a literal {n} that fmtRel fills via String.replace;
+  // formatting through t() would throw MissingValueError at runtime.
+  const ago = { s: t.raw("agoS"), m: t.raw("agoM"), h: t.raw("agoH"), d: t.raw("agoD") };
+
+  // ── data state ──
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [findings, setFindings] = React.useState<Finding[]>([]);
   const [stats, setStats] = React.useState<Stats | null>(null);
@@ -258,7 +260,7 @@ export default function DashboardPage() {
 
   const tasksByStatus = React.useMemo(() => {
     const m: Record<string, number> = {};
-    for (const t of tasks) m[t.status] = (m[t.status] ?? 0) + 1;
+    for (const task of tasks) m[task.status] = (m[task.status] ?? 0) + 1;
     return m;
   }, [tasks]);
 
@@ -328,23 +330,36 @@ export default function DashboardPage() {
   // tasks whose llm_profile_id is null/undefined used the active default profile
   const defaultProfileId = activeProfile ? Number(activeProfile.id) : null;
 
-  // 数据源开关：旧版 = activity（task.tokens + 会话），新版 = llm_usage 计量账本。
+  // Data-source switch: legacy = activity counts (task tokens + conversations), current = the llm_usage metering ledger.
   const [tokenVersion, setTokenVersion] = React.useState<"old" | "new">("old");
-  // selected profile tab: "all" = 全部; number = specific profile id
+  // selected profile tab: "all" = common.all; number = specific profile id
   const [tokenTab, setTokenTab] = React.useState<number | null | "all">("all");
   // day range for the daily bar chart
   const [tokenDays, setTokenDays] = React.useState<7 | 30 | 90 | 180 | 365>(30);
 
-  // profile 名 → id，用于把 llm_usage 的 profile_name 映射到现有 profile 分栏。
+  // profile name → id, used to map llm_usage's profile_name onto the existing profile tabs.
   const profileIdByName = React.useMemo(() => {
     const m = new Map<string, number>();
     for (const p of llmProfiles) m.set(p.name, Number(p.id));
     return m;
   }, [llmProfiles]);
 
+  // Localized asset-type labels; raw type names are shown for unknown types.
+  const assetLabels = React.useMemo<Record<string, string>>(
+    () => ({
+      root_domain: t("assetTypeRootDomain"),
+      ip: t("assetTypeIp"),
+      subdomain: t("assetTypeSubdomain"),
+      app: t("assetTypeApp"),
+      service: t("assetTypeService"),
+      endpoint: t("assetTypeEndpoint"),
+    }),
+    [t],
+  );
+
   type Bucket = { input: number; output: number; cacheRead: number; cacheWrite: number; taskCount: number };
 
-  // 旧版：按 profile 归桶（来自 activity 的 task.tokens + 会话用量）。
+  // Legacy: bucket by profile (from activity: task tokens + conversation usage).
   const tokenByProfileOld = React.useMemo<Map<number | null, Bucket>>(() => {
     const m = new Map<number | null, Bucket>();
     const fold = (key: number | null, inp: number, out: number, cr: number, cw: number, addTask: boolean) => {
@@ -357,13 +372,13 @@ export default function DashboardPage() {
         taskCount: prev.taskCount + (addTask ? 1 : 0),
       });
     };
-    for (const t of tasks) {
+    for (const task of tasks) {
       fold(
-        t.llm_profile_id ?? defaultProfileId,
-        t.tokens?.input_tokens ?? 0,
-        t.tokens?.output_tokens ?? 0,
-        t.tokens?.cache_read_tokens ?? 0,
-        t.tokens?.cache_write_tokens ?? 0,
+        task.llm_profile_id ?? defaultProfileId,
+        task.tokens?.input_tokens ?? 0,
+        task.tokens?.output_tokens ?? 0,
+        task.tokens?.cache_read_tokens ?? 0,
+        task.tokens?.cache_write_tokens ?? 0,
         true,
       );
     }
@@ -380,11 +395,11 @@ export default function DashboardPage() {
     return m;
   }, [tasks, convTokens, defaultProfileId]);
 
-  // 新版：按 profile 归桶（来自 llm_usage 全局聚合，逐次调用精确）。
+  // Current: bucket by profile (from the llm_usage global aggregation, exact per call).
   const tokenByProfileNew = React.useMemo<Map<number | null, Bucket>>(() => {
     const m = new Map<number | null, Bucket>();
     for (const p of usageStats?.by_profile ?? []) {
-      // 未匹配到现有 profile（改名/删除/空名）→ 落到默认桶，仍计入「全部」。
+      // No match against an existing profile (renamed/deleted/empty name) → fall back to the default bucket, still counted under "all".
       const key = profileIdByName.get(p.profile_name) ?? defaultProfileId;
       const prev = m.get(key) ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, taskCount: 0 };
       m.set(key, {
@@ -422,7 +437,7 @@ export default function DashboardPage() {
       : { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, taskCount: 0 };
   }, [tokenTab, tokenByProfile]);
 
-  // 旧版每日：把任务/会话的总量按其创建日期归桶（近似，非真实每日消耗）。
+  // Legacy daily: bucket each task's/conversation's total under its creation date (approximate, not real daily spend).
   const dailyTokenDataOld = React.useMemo(() => {
     const now = new Date();
     now.setDate(now.getDate() - tokenDays);
@@ -433,13 +448,13 @@ export default function DashboardPage() {
       const prev = m.get(date) ?? { input: 0, output: 0, cacheRead: 0 };
       m.set(date, { input: prev.input + inp, output: prev.output + out, cacheRead: prev.cacheRead + cr });
     };
-    for (const t of tasks) {
-      if (tokenTab !== "all" && (t.llm_profile_id ?? defaultProfileId) !== tokenTab) continue;
+    for (const task of tasks) {
+      if (tokenTab !== "all" && (task.llm_profile_id ?? defaultProfileId) !== tokenTab) continue;
       fold(
-        t.created_at.slice(0, 10),
-        t.tokens?.input_tokens ?? 0,
-        t.tokens?.output_tokens ?? 0,
-        t.tokens?.cache_read_tokens ?? 0,
+        task.created_at.slice(0, 10),
+        task.tokens?.input_tokens ?? 0,
+        task.tokens?.output_tokens ?? 0,
+        task.tokens?.cache_read_tokens ?? 0,
       );
     }
     for (const c of convTokens) {
@@ -449,7 +464,7 @@ export default function DashboardPage() {
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ date: date.slice(5), ...v }));
   }, [tasks, convTokens, tokenDays, tokenTab, defaultProfileId]);
 
-  // 新版每日：来自 llm_usage 的真实每日消耗（ts 是实际调用时刻）。
+  // Current daily: real daily spend from llm_usage (ts is the actual call time).
   const dailyTokenDataNew = React.useMemo(() => {
     const now = new Date();
     now.setDate(now.getDate() - tokenDays);
@@ -496,18 +511,18 @@ export default function DashboardPage() {
       {/* ── Header ── */}
       <div>
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">总览</h1>
-          <p className="text-xs text-muted-foreground">系统全局状态 · 实时刷新</p>
+          <h1 className="text-lg font-semibold tracking-tight">{t("title")}</h1>
+          <p className="text-xs text-muted-foreground">{t("subtitle")}</p>
         </div>
       </div>
 
       {/* ── Row 1: 5 stat cards ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {/* 活跃任务 */}
+        {/* Active tasks */}
         <Card className="gap-1">
           <CardHeader className="pb-0">
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <TargetIcon className="size-3" /> 活跃任务
+              <TargetIcon className="size-3" /> {t("statActiveTasks")}
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-semibold tabular-nums">{tasksByStatus.running ?? 0}</span>
@@ -515,45 +530,65 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-x-2.5 gap-y-0.5 text-[10px]">
-            {(tasksByStatus.running ?? 0) > 0 && <span className="text-blue-400">探索 {tasksByStatus.running}</span>}
-            {(tasksByStatus.paused ?? 0) > 0 && <span className="text-amber-400">暂停 {tasksByStatus.paused}</span>}
-            {(tasksByStatus.done ?? 0) > 0 && <span className="text-emerald-400">完成 {tasksByStatus.done}</span>}
-            {tasks.length === 0 && <span className="text-muted-foreground">暂无任务</span>}
+            {(tasksByStatus.running ?? 0) > 0 && (
+              <span className="text-blue-400">
+                {t("chipExploring")} {tasksByStatus.running}
+              </span>
+            )}
+            {(tasksByStatus.paused ?? 0) > 0 && (
+              <span className="text-amber-400">
+                {t("chipPaused")} {tasksByStatus.paused}
+              </span>
+            )}
+            {(tasksByStatus.done ?? 0) > 0 && (
+              <span className="text-emerald-400">
+                {t("chipDone")} {tasksByStatus.done}
+              </span>
+            )}
+            {tasks.length === 0 && <span className="text-muted-foreground">{t("noTasks")}</span>}
           </CardContent>
         </Card>
 
-        {/* 确认发现 */}
+        {/* Confirmed findings */}
         <Card className="gap-1">
           <CardHeader className="pb-0">
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <BugIcon className="size-3" /> 确认发现
+              <BugIcon className="size-3" /> {t("statFindings")}
             </div>
             <div className="text-2xl font-semibold tabular-nums">{findings.length}</div>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2.5 text-[10px]">
-            <span className="text-rose-500">严重 {findingsBySev.critical}</span>
-            <span className="text-red-400">高危 {findingsBySev.high}</span>
-            <span className="text-amber-400">中危 {findingsBySev.medium}</span>
-            <span className="text-slate-400">低危 {findingsBySev.low}</span>
+            <span className="text-rose-500">
+              {t("chipCritical")} {findingsBySev.critical}
+            </span>
+            <span className="text-red-400">
+              {t("chipHigh")} {findingsBySev.high}
+            </span>
+            <span className="text-amber-400">
+              {t("chipMedium")} {findingsBySev.medium}
+            </span>
+            <span className="text-slate-400">
+              {t("chipLow")} {findingsBySev.low}
+            </span>
           </CardContent>
         </Card>
 
-        {/* 资产节点 */}
+        {/* Asset nodes */}
         <Card className="gap-1">
           <CardHeader className="pb-0">
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <NetworkIcon className="size-3" /> 资产节点
+              <NetworkIcon className="size-3" /> {t("statAssetNodes")}
             </div>
             <div className="text-2xl font-semibold tabular-nums">{totalAssets}</div>
           </CardHeader>
-          <CardContent className="text-[10px] text-muted-foreground">跨任务共享</CardContent>
+          <CardContent className="text-[10px] text-muted-foreground">{t("statAssetsShared")}</CardContent>
         </Card>
 
-        {/* 流量交互 */}
+        {/* Traffic exchanges */}
         <Card className="gap-1">
           <CardHeader className="pb-0">
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <ActivityIcon className="size-3" /> 流量交互
+              <ActivityIcon className="size-3" /> {t("statTraffic")}
             </div>
             <div className="text-2xl font-semibold tabular-nums">{traffic.length}</div>
           </CardHeader>
@@ -561,55 +596,54 @@ export default function DashboardPage() {
             {settings?.traffic_capture ? (
               <>
                 <LiveDot />
-                <span>录制中</span>
+                <span>{t("trafficLive")}</span>
               </>
             ) : (
-              <span>捕获未开启</span>
+              <span>{t("trafficOff")}</span>
             )}
           </CardContent>
         </Card>
 
-        {/* LLM 用量 */}
+        {/* LLM token usage */}
         <Card className="gap-1">
           <CardHeader className="pb-0">
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <ZapIcon className="size-3" /> Token 用量
+              <ZapIcon className="size-3" /> {t("statTokenUsage")}
             </div>
             <div className="text-2xl font-semibold tabular-nums">
               {fmtTokens(displayedTokens.input + displayedTokens.output) || "—"}
             </div>
           </CardHeader>
           <CardContent className="text-[10px] text-muted-foreground">
-            入 {fmtTokens(displayedTokens.input)}（含缓存 {fmtTokens(displayedTokens.cacheRead)}）· 出{" "}
-            {fmtTokens(displayedTokens.output)}
+            {t("tokenUsageSummary", {
+              input: fmtTokens(displayedTokens.input),
+              cache: fmtTokens(displayedTokens.cacheRead),
+              output: fmtTokens(displayedTokens.output),
+            })}
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Row 2: LLM Token 消耗 ── */}
+      {/* ── Row 2: LLM token usage ── */}
       <Card className="p-4">
         {/* Header */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold">
             <ZapIcon className="size-3.5 text-muted-foreground" />
-            LLM Token 消耗
-            {/* 数据源开关：旧版=activity 统计（含历史任务），新版=llm_usage 计量账本（更准，仅覆盖启用后） */}
+            {t("tokenConsumption")}
+            {/* Data-source switch: legacy = activity stats (includes historical tasks), current = llm_usage metering ledger (more accurate, covers only data after it was enabled). */}
             <div className="ml-1 flex gap-0.5 rounded-md border bg-muted/30 p-0.5">
               {(
                 [
-                  { v: "old", label: "旧版" },
-                  { v: "new", label: "新版" },
+                  { v: "old", label: t("versionLegacy") },
+                  { v: "new", label: t("versionCurrent") },
                 ] as const
               ).map(({ v, label }) => (
                 <button
                   type="button"
                   key={v}
                   onClick={() => setTokenVersion(v)}
-                  title={
-                    v === "new"
-                      ? "新版：来自 llm_usage 计量账本，逐次调用精确、含中断消耗；仅覆盖启用后的数据"
-                      : "旧版：来自 activity 统计（含历史任务），中断消耗不计、无法精确到模型"
-                  }
+                  title={v === "new" ? t("versionNewTooltip") : t("versionOldTooltip")}
                   className={cn(
                     "rounded px-2 py-0.5 text-[9px] font-medium transition-colors",
                     tokenVersion === v
@@ -637,7 +671,7 @@ export default function DashboardPage() {
                   : "bg-muted/30 text-muted-foreground hover:text-foreground",
               )}
             >
-              全部
+              {tc("all")}
             </button>
             {llmProfiles.map((p) => {
               const key = Number(p.id);
@@ -666,7 +700,7 @@ export default function DashboardPage() {
                           : "bg-emerald-500/20 text-emerald-400",
                       )}
                     >
-                      默认
+                      {t("defaultBadge")}
                     </span>
                   )}
                 </button>
@@ -681,33 +715,35 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-4">
             {/* Total */}
             <div>
-              <div className="text-[10px] text-muted-foreground">合计 (输入+输出)</div>
+              <div className="text-[10px] text-muted-foreground">
+                {tc("total")} ({t("tokenInput")}+{t("tokenOutput")})
+              </div>
               <div className="mt-0.5 text-3xl font-bold tabular-nums tracking-tight">
                 {fmtTokens(displayedTokens.input + displayedTokens.output) || "—"}
               </div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">{displayedTokens.taskCount} 个任务</div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">{t("tasksCount", { count: displayedTokens.taskCount })}</div>
             </div>
 
             {/* Per-type bars */}
             <div className="space-y-3">
               {(() => {
-                // input 已含缓存；拆成不重叠三段：未命中输入 + 缓存命中 + 输出 = 总量。
+                // input already includes cache reads; split into three non-overlapping segments: cache-miss input + cache hit + output = total.
                 const total = displayedTokens.input + displayedTokens.output;
                 return [
                   {
-                    label: "输入(未命中)",
+                    label: t("tokenInputCacheMiss"),
                     value: displayedTokens.input - displayedTokens.cacheRead,
                     barColor: dailyTrendConfig.input.color!,
                     text: "text-blue-400",
                   },
                   {
-                    label: "缓存命中",
+                    label: t("cacheHit"),
                     value: displayedTokens.cacheRead,
                     barColor: dailyTrendConfig.cacheRead.color!,
                     text: "text-emerald-400",
                   },
                   {
-                    label: "输出",
+                    label: t("tokenOutput"),
                     value: displayedTokens.output,
                     barColor: dailyTrendConfig.output.color!,
                     text: "text-violet-400",
@@ -734,12 +770,12 @@ export default function DashboardPage() {
 
             {/* Cache hit rate */}
             {(() => {
-              // input 已含缓存 → 命中率 = 缓存命中 / 总输入。
+              // input already includes cache reads → hit rate = cache hit / total input.
               const denominator = displayedTokens.input;
               const hitPct = denominator > 0 ? Math.round((displayedTokens.cacheRead / denominator) * 100) : 0;
               return (
                 <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2 text-[10px]">
-                  <span className="text-muted-foreground">缓存命中率</span>
+                  <span className="text-muted-foreground">{t("cacheHitRate")}</span>
                   <span
                     className={cn("font-semibold tabular-nums", hitPct > 50 ? "text-emerald-400" : "text-amber-400")}
                   >
@@ -767,11 +803,11 @@ export default function DashboardPage() {
               <div className="flex gap-0.5 rounded-md border bg-muted/30 p-0.5">
                 {(
                   [
-                    { days: 7, label: "7天" },
-                    { days: 30, label: "30天" },
-                    { days: 90, label: "3月" },
-                    { days: 180, label: "6月" },
-                    { days: 365, label: "一年" },
+                    { days: 7, label: t("rangeDays", { n: 7 }) },
+                    { days: 30, label: t("rangeDays", { n: 30 }) },
+                    { days: 90, label: t("rangeMonths", { n: 3 }) },
+                    { days: 180, label: t("rangeMonths", { n: 6 }) },
+                    { days: 365, label: t("rangeYear") },
                   ] as const
                 ).map(({ days, label }) => (
                   <button
@@ -796,7 +832,7 @@ export default function DashboardPage() {
                 className="flex flex-1 items-center justify-center rounded-lg border bg-muted/10 text-xs text-muted-foreground"
                 style={{ minHeight: 180 }}
               >
-                暂无数据
+                {t("noChartData")}
               </div>
             ) : (
               <ChartContainer config={dailyTrendConfig} className="h-[200px] w-full">
@@ -844,24 +880,24 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      {/* ── Row 3: 活动流 | 发现 ── */}
+      {/* ── Row 3: activity feed | findings ── */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {/* 活动流 */}
+        {/* Activity feed */}
         <Card className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs font-semibold">
               <ActivityIcon className="size-3.5 text-muted-foreground" />
-              活动流
+              {t("activityFeed")}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground">
-                {activity.filter((a) => a.kind !== "usage").length} 条事件
+                {t("eventsCount", { count: activity.filter((a) => a.kind !== "usage").length })}
               </span>
               <Link
                 href="/function/tasks"
                 className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
               >
-                查看任务 <ArrowUpRightIcon className="size-3" />
+                {t("viewTasks")} <ArrowUpRightIcon className="size-3" />
               </Link>
             </div>
           </div>
@@ -880,7 +916,7 @@ export default function DashboardPage() {
 
           <div className="divide-y">
             {recentActivity.length === 0 ? (
-              <div className="py-4 text-center text-xs text-muted-foreground">暂无活动记录</div>
+              <div className="py-4 text-center text-xs text-muted-foreground">{t("noActivity")}</div>
             ) : (
               recentActivity.map((a) => (
                 <div key={a.seq} className="flex gap-2.5 py-2">
@@ -900,7 +936,7 @@ export default function DashboardPage() {
                     <Badge variant="outline" className="px-1.5 py-0 text-[9px] text-muted-foreground">
                       {a.kind}
                     </Badge>
-                    <div className="mt-0.5 text-[9px] tabular-nums text-muted-foreground">{fmtRel(a.ts)}</div>
+                    <div className="mt-0.5 text-[9px] tabular-nums text-muted-foreground">{fmtRel(a.ts, ago)}</div>
                   </div>
                 </div>
               ))
@@ -908,24 +944,24 @@ export default function DashboardPage() {
           </div>
         </Card>
 
-        {/* 发现 */}
+        {/* Findings */}
         <Card className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs font-semibold">
               <BugIcon className="size-3.5 text-muted-foreground" />
-              发现
+              {t("findings")}
             </div>
             <Link
               href="/function/findings"
               className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
             >
-              全部 <ArrowUpRightIcon className="size-3" />
+              {tc("all")} <ArrowUpRightIcon className="size-3" />
             </Link>
           </div>
 
           <div className="divide-y">
             {recentFindings.length === 0 ? (
-              <div className="py-4 text-center text-xs text-muted-foreground">暂无发现</div>
+              <div className="py-4 text-center text-xs text-muted-foreground">{t("noFindings")}</div>
             ) : (
               recentFindings.map((f) => (
                 <div key={f.id} className="flex items-start gap-2 py-2">
@@ -945,7 +981,7 @@ export default function DashboardPage() {
                       {f.summary}
                     </div>
                   </div>
-                  <span className="shrink-0 text-[9px] tabular-nums text-muted-foreground">{fmtRel(f.ts)}</span>
+                  <span className="shrink-0 text-[9px] tabular-nums text-muted-foreground">{fmtRel(f.ts, ago)}</span>
                 </div>
               ))
             )}
@@ -953,61 +989,63 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* ── Row 4: 任务表格 ── */}
+      {/* ── Row 4: task table ── */}
       <Card className="overflow-hidden p-0">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-1.5 text-xs font-semibold">
             <ClockIcon className="size-3.5 text-muted-foreground" />
-            任务
+            {t("tasks")}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">{tasks.length} 个任务</span>
+            <span className="text-[10px] text-muted-foreground">{t("tasksCount", { count: tasks.length })}</span>
             <Link
               href="/function/tasks"
               className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
             >
-              全部 <ArrowUpRightIcon className="size-3" />
+              {tc("all")} <ArrowUpRightIcon className="size-3" />
             </Link>
           </div>
         </div>
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr className="border-b">
-              {["任务", "状态", "引擎", "目标进度", "在途", "最近活动"].map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-2 text-left text-[9px] font-semibold uppercase tracking-widest text-muted-foreground first:pl-4"
-                >
-                  {h}
-                </th>
-              ))}
+              {[t("thTask"), t("thStatus"), t("thEngine"), t("thProgress"), t("thInFlight"), t("thLastActivity")].map(
+                (h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-2 text-left text-[9px] font-semibold uppercase tracking-widest text-muted-foreground first:pl-4"
+                  >
+                    {h}
+                  </th>
+                ),
+              )}
             </tr>
           </thead>
           <tbody>
             {sortedTasks.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-xs text-muted-foreground">
-                  暂无任务
+                  {t("noTasks")}
                 </td>
               </tr>
             ) : (
-              sortedTasks.map((t) => {
-                const goalsPct = t.goals_total ? Math.round(((t.goals_met ?? 0) / t.goals_total) * 100) : null;
+              sortedTasks.map((task) => {
+                const goalsPct = task.goals_total ? Math.round(((task.goals_met ?? 0) / task.goals_total) * 100) : null;
                 return (
-                  <tr key={t.id} className="border-b last:border-0 transition-colors hover:bg-muted/30">
+                  <tr key={task.id} className="border-b last:border-0 transition-colors hover:bg-muted/30">
                     <td className="max-w-xs px-4 py-3">
-                      <Link href={`/function/tasks/detail?id=${t.id}`} className="group flex flex-col">
-                        <span className="truncate font-medium group-hover:underline">{t.description}</span>
-                        <span className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{t.id}</span>
+                      <Link href={`/function/tasks/detail?id=${task.id}`} className="group flex flex-col">
+                        <span className="truncate font-medium group-hover:underline">{task.description}</span>
+                        <span className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{task.id}</span>
                       </Link>
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge domain="task" value={t.status} dot className="px-1.5 py-0 text-[10px]" />
+                      <StatusBadge domain="task" value={task.status} dot className="px-1.5 py-0 text-[10px]" />
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge
                         domain="engine"
-                        value={t.engine_mode ?? "idle"}
+                        value={task.engine_mode ?? "idle"}
                         className="px-1.5 py-0 text-[10px]"
                       />
                     </td>
@@ -1016,7 +1054,7 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-2">
                           <Progress value={goalsPct} className="h-1 w-14" />
                           <span className="tabular-nums text-muted-foreground">
-                            {t.goals_met ?? 0}/{t.goals_total}
+                            {task.goals_met ?? 0}/{task.goals_total}
                           </span>
                         </div>
                       ) : (
@@ -1024,14 +1062,14 @@ export default function DashboardPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 tabular-nums">
-                      {(t.in_flight ?? 0) > 0 ? (
-                        <span className="font-semibold">{t.in_flight}</span>
+                      {(task.in_flight ?? 0) > 0 ? (
+                        <span className="font-semibold">{task.in_flight}</span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                      {fmtRel(t.last_activity_unix ?? t.created_unix)}
+                      {fmtRel(task.last_activity_unix ?? task.created_unix, ago)}
                     </td>
                   </tr>
                 );
@@ -1041,22 +1079,22 @@ export default function DashboardPage() {
         </table>
       </Card>
 
-      {/* ── Row 5: 资产分布 | 流量状态码 | 拦截 & 待审批 ── */}
+      {/* ── Row 5: asset distribution | traffic status codes | intercept & approvals ── */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        {/* 资产分布 */}
+        {/* Asset distribution */}
         <Card className="p-4">
-          <SectionTitle icon={NetworkIcon} sub="按类型">
-            资产分布
+          <SectionTitle icon={NetworkIcon} sub={t("byType")}>
+            {t("assetDistribution")}
           </SectionTitle>
 
           {assetByType.length === 0 ? (
-            <div className="py-6 text-center text-xs text-muted-foreground">暂无资产数据</div>
+            <div className="py-6 text-center text-xs text-muted-foreground">{t("noAssets")}</div>
           ) : (
             <div className="flex flex-col gap-2">
               {assetByType.map(([type, count]) => (
                 <div key={type} className="flex items-center gap-2 text-xs">
                   <span className="w-8 shrink-0 text-right text-[10px] text-muted-foreground">
-                    {ASSET_TYPE_LABELS[type] ?? type}
+                    {assetLabels[type] ?? type}
                   </span>
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                     <div
@@ -1070,18 +1108,20 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <div className="mt-3 border-t pt-3 text-[10px] text-muted-foreground">共 {totalAssets} 节点</div>
+          <div className="mt-3 border-t pt-3 text-[10px] text-muted-foreground">
+            {tc("total")} {totalAssets} {t("nodesSuffix")}
+          </div>
         </Card>
 
-        {/* 流量状态码 */}
+        {/* Traffic status codes */}
         <Card className="p-4">
-          <SectionTitle icon={ActivityIcon} sub={`${traffic.length} 次请求`}>
-            流量状态码
+          <SectionTitle icon={ActivityIcon} sub={t("requestsCount", { count: traffic.length })}>
+            {t("trafficStatusCodes")}
           </SectionTitle>
 
           {/* bar chart */}
           {trafficByCodes.length === 0 ? (
-            <div className="py-6 text-center text-xs text-muted-foreground">暂无流量数据</div>
+            <div className="py-6 text-center text-xs text-muted-foreground">{t("noTraffic")}</div>
           ) : (
             <>
               <div className="mb-3 flex items-end gap-2" style={{ height: 52 }}>
@@ -1098,7 +1138,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="border-t pt-2.5">
-                <div className="mb-1.5 text-[10px] text-muted-foreground">最近请求</div>
+                <div className="mb-1.5 text-[10px] text-muted-foreground">{t("recentRequests")}</div>
                 <div className="flex flex-col gap-1.5">
                   {recentTraffic.map((e) => (
                     <div key={e.id} className="flex items-center gap-1.5 text-[10px]">
@@ -1125,13 +1165,13 @@ export default function DashboardPage() {
           )}
         </Card>
 
-        {/* 系统状态 & 待审批 */}
+        {/* System status & approvals */}
         <Card className="p-4">
-          <SectionTitle icon={ShieldCheckIcon}>系统状态</SectionTitle>
+          <SectionTitle icon={ShieldCheckIcon}>{t("systemStatus")}</SectionTitle>
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2">
-              <div className="text-[10px] text-muted-foreground">LLM 配置</div>
+              <div className="text-[10px] text-muted-foreground">{t("llmConfig")}</div>
               <Badge
                 variant="outline"
                 className={cn(
@@ -1141,12 +1181,12 @@ export default function DashboardPage() {
                     : "border-red-500/30 bg-red-500/10 text-red-400",
                 )}
               >
-                {stats?.llm_configured ? "已配置" : "未配置"}
+                {t(stats?.llm_configured ? "configured" : "notConfigured")}
               </Badge>
             </div>
 
             <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2">
-              <div className="text-[10px] text-muted-foreground">流量捕获</div>
+              <div className="text-[10px] text-muted-foreground">{t("trafficCapture")}</div>
               <Badge
                 variant="outline"
                 className={cn(
@@ -1156,13 +1196,13 @@ export default function DashboardPage() {
                     : "text-muted-foreground",
                 )}
               >
-                {settings?.traffic_capture ? "开启" : "关闭"}
+                {t(settings?.traffic_capture ? "captureOn" : "captureOff")}
               </Badge>
             </div>
 
             {activeProfile && (
               <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2">
-                <div className="text-[10px] text-muted-foreground">激活模型</div>
+                <div className="text-[10px] text-muted-foreground">{t("activeModel")}</div>
                 <span className="font-mono text-[10px]">{activeProfile.model}</span>
               </div>
             )}
@@ -1171,7 +1211,9 @@ export default function DashboardPage() {
           {/* pending approvals */}
           {pendingCount > 0 && (
             <div className="mt-3">
-              <div className="mb-1.5 text-[10px] font-medium text-amber-400">待审批 ({pendingCount})</div>
+              <div className="mb-1.5 text-[10px] font-medium text-amber-400">
+                {t("pendingApprovals", { count: pendingCount })}
+              </div>
               <div className="flex flex-col gap-1.5">
                 {pending.slice(0, 3).map((p) => (
                   <Link
@@ -1191,7 +1233,7 @@ export default function DashboardPage() {
                     href="/system/intercept/approvals"
                     className="text-center text-[10px] text-muted-foreground hover:text-foreground"
                   >
-                    还有 {pendingCount - 3} 条…
+                    {t("pendingMore", { count: pendingCount - 3 })}
                   </Link>
                 )}
               </div>
@@ -1201,7 +1243,7 @@ export default function DashboardPage() {
           {pendingCount === 0 && (
             <div className="mt-3 rounded-lg border bg-muted/10 px-3 py-3 text-center text-[10px] text-muted-foreground">
               <ShieldCheckIcon className="mx-auto mb-1 size-4 text-emerald-500/50" />
-              无待审批拦截
+              {t("noPendingApprovals")}
             </div>
           )}
         </Card>

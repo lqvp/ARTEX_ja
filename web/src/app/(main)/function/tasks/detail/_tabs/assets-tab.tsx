@@ -15,6 +15,7 @@ import {
   SmartphoneIcon,
   Trash2Icon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { AssetDslSearch } from "@/components/asset-dsl-search";
@@ -56,13 +57,14 @@ const METHOD_COLOR: Record<string, string> = {
   PUT: "bg-amber-100 text-amber-700",
 };
 
-const TABS: { key: NewAssetType; label: string; icon: LucideIcon }[] = [
-  { key: "root_domain", label: "根域名", icon: GlobeIcon },
-  { key: "ip", label: "IP", icon: NetworkIcon },
-  { key: "subdomain", label: "子域名", icon: GlobeIcon },
-  { key: "app", label: "应用", icon: SmartphoneIcon },
-  { key: "service", label: "服务", icon: LayoutTemplateIcon },
-  { key: "endpoint", label: "接口", icon: LinkIcon },
+// labelKey values feed t() in the tab bar (checker-visible literal field form).
+const TABS: { key: NewAssetType; labelKey: string; icon: LucideIcon }[] = [
+  { key: "root_domain", labelKey: "assetTypeRootDomain", icon: GlobeIcon },
+  { key: "ip", labelKey: "assetTypeIp", icon: NetworkIcon },
+  { key: "subdomain", labelKey: "assetTypeSubdomain", icon: GlobeIcon },
+  { key: "app", labelKey: "assetTypeApp", icon: SmartphoneIcon },
+  { key: "service", labelKey: "assetTypeService", icon: LayoutTemplateIcon },
+  { key: "endpoint", labelKey: "assetTypeEndpoint", icon: LinkIcon },
 ];
 
 function firstText(values: Array<string | undefined>, fallback: string): string {
@@ -132,21 +134,23 @@ function Chips({ items, mono }: { items: string[]; mono?: boolean }) {
 }
 
 function SourceCell({ asset }: { asset: Asset }) {
+  const t = useTranslations("tasksDetail");
+  const tc = useTranslations("common");
   const source = firstText([asset.task_source], "legacy");
-  const summary = firstText([asset.task_source_summary], "由历史任务资产关联迁移，暂无更详细来源说明");
+  const summary = firstText([asset.task_source_summary], t("sourceLegacySummary"));
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Badge variant="outline" className="max-w-28 shrink-0 font-normal">
-          <span className="truncate">{taskAssetSourceLabel(source)}</span>
+          <span className="truncate">{taskAssetSourceLabel(source, tc)}</span>
         </Badge>
       </TooltipTrigger>
       <TooltipContent side="left" align="start" className="max-w-sm">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="font-medium">{taskAssetSourceLabel(source)}</span>
+          <span className="font-medium">{taskAssetSourceLabel(source, tc)}</span>
           <span className="[overflow-wrap:anywhere]">{summary}</span>
           {asset.task_source_node_id ? (
-            <span className="font-mono opacity-80">来源节点 #{asset.task_source_node_id}</span>
+            <span className="font-mono opacity-80">{t("sourceNode", { id: asset.task_source_node_id })}</span>
           ) : null}
         </div>
       </TooltipContent>
@@ -173,6 +177,7 @@ function AssetCard({
   size: number;
   total: number;
 }) {
+  const t = useTranslations("tasksDetail");
   const rows = React.Children.toArray(children);
   const pageCount = Math.max(1, Math.ceil(total / size));
   const start = total === 0 ? 0 : page * size + 1;
@@ -192,7 +197,7 @@ function AssetCard({
     tableRows = (
       <TableRow>
         <TableCell colSpan={cols.length} className="py-10 text-center text-muted-foreground text-sm">
-          当前分类暂无测试资产
+          {t("assetEmpty")}
         </TableCell>
       </TableRow>
     );
@@ -227,7 +232,7 @@ function AssetCard({
               <SelectGroup>
                 {PAGE_SIZES.map((value) => (
                   <SelectItem key={value} value={String(value)}>
-                    {value} / 页
+                    {t("perPageN", { n: value })}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -243,7 +248,7 @@ function AssetCard({
                 size="icon-sm"
                 disabled={page <= 0}
                 onClick={() => onPage(Math.max(0, page - 1))}
-                aria-label="上一页"
+                aria-label={t("prevPage")}
               >
                 <ChevronLeftIcon />
               </Button>
@@ -255,7 +260,7 @@ function AssetCard({
                 size="icon-sm"
                 disabled={page + 1 >= pageCount}
                 onClick={() => onPage(Math.min(pageCount - 1, page + 1))}
-                aria-label="下一页"
+                aria-label={t("nextPage")}
               >
                 <ChevronRightIcon />
               </Button>
@@ -278,6 +283,8 @@ function AddTaskAssetsSheet({
   open: boolean;
   taskId: string;
 }) {
+  const t = useTranslations("tasksDetail");
+  const tc = useTranslations("common");
   const [scopeText, setScopeText] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const parsedScope = React.useMemo(() => parseCompanyScopeText(scopeText), [scopeText]);
@@ -293,11 +300,11 @@ function AddTaskAssetsSheet({
     try {
       const result = await api.registerTaskAssetScopes(taskId, parsedScope.rules);
       const assetSummary = result.assets_linked + result.assets_existing;
-      toast.success(`已登记 ${result.requested} 条范围，关联 ${assetSummary} 项域名/IP 资产`);
+      toast.success(t("toastScopesRegistered", { requested: result.requested, linked: assetSummary }));
       onAttached();
       onOpenChange(false);
     } catch (reason) {
-      toast.error(`新增失败：${String((reason as Error)?.message ?? reason)}`);
+      toast.error(t("toastRegisterFail", { message: String((reason as Error)?.message ?? reason) }));
     } finally {
       setSaving(false);
     }
@@ -307,10 +314,8 @@ function AddTaskAssetsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl">
         <SheetHeader>
-          <SheetTitle>新增测试资产</SheetTitle>
-          <SheetDescription>
-            直接填写测试范围。域名和 IP 会创建或复用全局资产；CIDR、ICP 和关键词作为 Agent 范围上下文。
-          </SheetDescription>
+          <SheetTitle>{t("addAssets")}</SheetTitle>
+          <SheetDescription>{t("addAssetsDesc")}</SheetDescription>
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4">
           <ScopeTextEditor
@@ -318,20 +323,20 @@ function AddTaskAssetsSheet({
             value={scopeText}
             onValueChange={setScopeText}
             parsed={parsedScope}
-            label="测试资产与范围"
-            description="每行一条，自动识别域名、IP、CIDR、ICP 备案和关键词。"
+            label={t("assetScopeLabel")}
+            description={t("assetScopeDesc")}
           />
         </div>
         <SheetFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            取消
+            {tc("cancel")}
           </Button>
           <Button
             onClick={() => void attach()}
             disabled={saving || parsedScope.rules.length === 0 || parsedScope.errors.length > 0}
           >
             {saving ? <Spinner data-icon="inline-start" /> : <PlusIcon data-icon="inline-start" />}
-            登记 {parsedScope.rules.length > 0 ? parsedScope.rules.length : ""} 条
+            {t("registerN", { n: parsedScope.rules.length > 0 ? parsedScope.rules.length : "" })}
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -340,6 +345,8 @@ function AddTaskAssetsSheet({
 }
 
 export function AssetsTab({ taskId }: { taskId: string }) {
+  const t = useTranslations("tasksDetail");
+  const tc = useTranslations("common");
   const [rows, setRows] = React.useState<Asset[]>([]);
   const [total, setTotal] = React.useState(0);
   const [counts, setCounts] = React.useState<Record<string, number>>({});
@@ -404,7 +411,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
           setRows([]);
           setTotal(0);
         } else {
-          toast.error(`加载任务资产失败：${message}`);
+          toast.error(t("toastAssetLoadFail", { message }));
         }
       } finally {
         if (active && assetsRequestRef.current === request) {
@@ -438,11 +445,11 @@ export function AssetsTab({ taskId }: { taskId: string }) {
     setRemoving(true);
     try {
       await api.detachTaskAsset(taskId, removeTarget.id);
-      toast.success(`已将 ${assetLabel(removeTarget)} 移出当前任务`);
+      toast.success(t("toastDetached", { label: assetLabel(removeTarget) }));
       setRemoveTarget(null);
       refresh();
     } catch (reason) {
-      toast.error(`移出失败：${String((reason as Error)?.message ?? reason)}`);
+      toast.error(t("toastDetachFail", { message: String((reason as Error)?.message ?? reason) }));
     } finally {
       setRemoving(false);
     }
@@ -453,8 +460,8 @@ export function AssetsTab({ taskId }: { taskId: string }) {
       variant="ghost"
       size="icon-sm"
       onClick={() => setRemoveTarget(asset)}
-      aria-label={`将资产 ${assetLabel(asset)} 移出任务`}
-      title="移出任务"
+      aria-label={t("detachAssetAria", { label: assetLabel(asset) })}
+      title={t("detachFromTask")}
     >
       <Trash2Icon />
     </Button>
@@ -477,12 +484,12 @@ export function AssetsTab({ taskId }: { taskId: string }) {
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-medium text-sm">测试资产</h2>
-          <p className="text-muted-foreground text-xs">当前任务共关联 {totalAll} 项资产</p>
+          <h2 className="font-medium text-sm">{t("assetsTitle")}</h2>
+          <p className="text-muted-foreground text-xs">{t("assetsTotal", { n: totalAll })}</p>
         </div>
         <Button size="sm" onClick={() => setAddOpen(true)}>
           <PlusIcon data-icon="inline-start" />
-          新增测试资产
+          {t("addAssets")}
         </Button>
       </div>
 
@@ -496,7 +503,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
             {TABS.map((item) => (
               <TabsTrigger key={item.key} value={item.key}>
                 <item.icon data-icon="inline-start" />
-                {item.label}
+                {t(item.labelKey)}
                 <span className="text-muted-foreground tabular-nums">{counts[item.key] ?? 0}</span>
               </TabsTrigger>
             ))}
@@ -506,7 +513,10 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         {searchBox}
 
         <TabsContent value="root_domain" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard cols={["域名", "ICP 备案", "来源", "操作"]} {...commonCardProps}>
+          <AssetCard
+            cols={[t("colDomain"), t("colIcp"), t("colSource"), t("colActions")]}
+            {...commonCardProps}
+          >
             {rows.map((asset) => (
               <TableRow key={asset.id}>
                 <TableCell className="font-medium font-mono text-xs">{asset.domain}</TableCell>
@@ -521,7 +531,10 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         </TabsContent>
 
         <TabsContent value="ip" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard cols={["IP", "C段", "绑定域名", "开放端口", "来源", "操作"]} {...commonCardProps}>
+          <AssetCard
+            cols={["IP", t("colCSegment"), t("colBoundDomains"), t("colOpenPorts"), t("colSource"), t("colActions")]}
+            {...commonCardProps}
+          >
             {rows.map((asset) => (
               <TableRow key={asset.id}>
                 <TableCell className="font-medium font-mono text-xs">{asset.ip}</TableCell>
@@ -547,7 +560,17 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         </TabsContent>
 
         <TabsContent value="subdomain" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard cols={["域名", "根域名", "解析类型", "解析值", "来源", "操作"]} {...commonCardProps}>
+          <AssetCard
+            cols={[
+              t("colDomain"),
+              t("assetTypeRootDomain"),
+              t("colRecordType"),
+              t("colRecordValue"),
+              t("colSource"),
+              t("colActions"),
+            ]}
+            {...commonCardProps}
+          >
             {rows.map((asset) => (
               <TableRow key={asset.id}>
                 <TableCell className="font-medium font-mono text-xs">{asset.domain}</TableCell>
@@ -566,7 +589,18 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         </TabsContent>
 
         <TabsContent value="app" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard cols={["应用", "地址", "分类", "标题", "指纹", "来源", "操作"]} {...commonCardProps}>
+          <AssetCard
+            cols={[
+              t("assetTypeApp"),
+              t("colAddress"),
+              t("colCategory"),
+              t("colTitle"),
+              t("colFingerprint"),
+              t("colSource"),
+              t("colActions"),
+            ]}
+            {...commonCardProps}
+          >
             {rows.map((asset) => (
               <TableRow key={asset.id}>
                 <TableCell className="max-w-48 truncate font-medium text-xs">{asset.app_name || "—"}</TableCell>
@@ -589,7 +623,16 @@ export function AssetsTab({ taskId }: { taskId: string }) {
 
         <TabsContent value="service" className="mt-0 flex min-h-0 flex-1 flex-col">
           <AssetCard
-            cols={["地址 / 服务", "状态码", "标题", "响应长度", "指纹", "认证", "来源", "操作"]}
+            cols={[
+              t("colAddressService"),
+              t("colStatusCode"),
+              t("colTitle"),
+              t("colContentLength"),
+              t("colFingerprint"),
+              t("colAuth"),
+              t("colSource"),
+              t("colActions"),
+            ]}
             {...commonCardProps}
           >
             {rows.map((asset) => {
@@ -630,7 +673,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
                             className="inline-flex items-center gap-1 text-[11px]"
                           >
                             <KeyRoundIcon className="size-3 text-muted-foreground" />
-                            <span className="font-mono">{item.type || item.username || "认证"}</span>
+                            <span className="font-mono">{item.type || item.username || t("authFallback")}</span>
                           </span>
                         );
                       })
@@ -647,7 +690,10 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         </TabsContent>
 
         <TabsContent value="endpoint" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard cols={["方法", "完整地址", "参数", "来源", "操作"]} {...commonCardProps}>
+          <AssetCard
+            cols={[t("colMethod"), t("colFullUrl"), t("colParams"), t("colSource"), t("colActions")]}
+            {...commonCardProps}
+          >
             {rows.map((asset) => (
               <TableRow key={asset.id}>
                 <TableCell className="w-16">
@@ -680,14 +726,14 @@ export function AssetsTab({ taskId }: { taskId: string }) {
       <AlertDialog open={Boolean(removeTarget)} onOpenChange={(open) => !open && !removing && setRemoveTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>移出当前任务？</AlertDialogTitle>
+            <AlertDialogTitle>{t("detachConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription className="[overflow-wrap:anywhere]">
-              {removeTarget ? `将“${assetLabel(removeTarget)}”从当前任务的测试资产中移出。` : ""}
-              全局资产、关联流量和历史黑板锚点会继续保留。
+              {removeTarget ? t("detachConfirmDesc", { label: assetLabel(removeTarget) }) : ""}
+              {t("detachConfirmKeep")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={removing}>取消</AlertDialogCancel>
+            <AlertDialogCancel disabled={removing}>{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={removing}
@@ -697,7 +743,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
               }}
             >
               {removing ? <Spinner data-icon="inline-start" /> : <Trash2Icon data-icon="inline-start" />}
-              {removing ? "移出中" : "确认移出"}
+              {removing ? t("detaching") : t("detachConfirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

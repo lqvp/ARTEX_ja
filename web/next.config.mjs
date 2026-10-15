@@ -1,3 +1,5 @@
+import createNextIntlPlugin from "next-intl/plugin";
+
 import { fileURLToPath } from "node:url";
 
 // 静态导出：`NEXT_EXPORT=1 next build` 产出纯静态目录到 web/out，可直接丢进
@@ -39,4 +41,6 @@ const nextConfig = {
         }),
 };
 
-export default nextConfig;
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
+export default withNextIntl(nextConfig);

@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { AlertCircleIcon, CheckCircle2Icon, DownloadIcon, PlugZapIcon, RefreshCwIcon, SearchIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -27,18 +28,21 @@ type SSStatus = {
 
 type Dimension = "project" | "task";
 
-const ASSET_TYPES: { key: string; label: string }[] = [
-  { key: "subdomain", label: "子域名" },
-  { key: "service", label: "服务" },
-  { key: "app", label: "App" },
+// labelKey values are resolved through the sync translator at the render sites
+// (checker-visible literal field form).
+const ASSET_TYPES: { key: string; labelKey: string }[] = [
+  { key: "subdomain", labelKey: "assetTypeSubdomain" },
+  { key: "service", labelKey: "assetTypeService" },
+  { key: "app", labelKey: "assetTypeApp" },
 ];
 
 export default function AssetSyncPage() {
+  const tsync = useTranslations("sync");
   return (
     <div className="p-4 md:p-6">
       <div className="mb-4">
-        <h1 className="font-semibold text-xl">资产同步</h1>
-        <p className="text-muted-foreground text-sm">从外部数据源同步资产入库</p>
+        <h1 className="font-semibold text-xl">{tsync("title")}</h1>
+        <p className="text-muted-foreground text-sm">{tsync("subtitle")}</p>
       </div>
       <Tabs defaultValue="scopesentry">
         <TabsList>
@@ -53,6 +57,7 @@ export default function AssetSyncPage() {
 }
 
 function ScopeSentryPanel() {
+  const tsync = useTranslations("sync");
   const [status, setStatus] = React.useState<SSStatus | null>(null);
   const [loadingStatus, setLoadingStatus] = React.useState(true);
 
@@ -61,9 +66,9 @@ function ScopeSentryPanel() {
     api
       .ssStatus()
       .then(setStatus)
-      .catch((e) => toast.error(`读取数据源状态失败：${e.message}`))
+      .catch((e) => toast.error(tsync("toastStatusFail", { message: e.message })))
       .finally(() => setLoadingStatus(false));
-  }, []);
+  }, [tsync]);
 
   React.useEffect(() => {
     loadStatus();
@@ -79,7 +84,7 @@ function ScopeSentryPanel() {
       ) : (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
-            数据源就绪后即可选择项目 / 任务进行同步。
+            {tsync("notReadyHint")}
           </CardContent>
         </Card>
       )}
@@ -87,7 +92,7 @@ function ScopeSentryPanel() {
   );
 }
 
-// ── 数据源状态卡 ─────────────────────────────────────────────────────────────
+// ── Data source status card ──────────────────────────────────────────────────
 
 function DataSourceCard({
   status,
@@ -98,6 +103,8 @@ function DataSourceCard({
   loading: boolean;
   onChanged: () => void;
 }) {
+  const tsync = useTranslations("sync");
+  const tc = useTranslations("common");
   const [url, setUrl] = React.useState("");
   const [apiKey, setApiKey] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -110,25 +117,25 @@ function DataSourceCard({
     setBusy(true);
     try {
       await api.ssDatasource({});
-      toast.success("已创建 ScopeSentry 数据源，请填写地址与密钥");
+      toast.success(tsync("toastDatasourceCreated"));
       onChanged();
     } catch (e) {
-      toast.error(`创建失败：${(e as Error).message}`);
+      toast.error(tsync("toastCreateFail", { message: (e as Error).message }));
     } finally {
       setBusy(false);
     }
   };
 
   const save = async () => {
-    if (!url.trim()) return toast.error("请填写 MCP 地址");
+    if (!url.trim()) return toast.error(tsync("toastUrlRequired"));
     setBusy(true);
     try {
       const r = await api.ssDatasource({ url: url.trim(), api_key: apiKey.trim() });
-      toast.success(r.enabled ? "已保存并启用数据源" : "已保存（尚未满足启用条件）");
+      toast.success(r.enabled ? tsync("toastSavedEnabled") : tsync("toastSavedPending"));
       setApiKey("");
       onChanged();
     } catch (e) {
-      toast.error(`保存失败：${(e as Error).message}`);
+      toast.error(tsync("toastSaveFail", { message: (e as Error).message }));
     } finally {
       setBusy(false);
     }
@@ -138,40 +145,40 @@ function DataSourceCard({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
-          <PlugZapIcon className="size-4" /> 数据源状态
+          <PlugZapIcon className="size-4" /> {tsync("datasourceStatus")}
           <StatusBadge status={status} loading={loading} />
         </CardTitle>
         <Button variant="ghost" size="sm" onClick={onChanged} disabled={loading}>
-          <RefreshCwIcon className={loading ? "size-4 animate-spin" : "size-4"} /> 刷新
+          <RefreshCwIcon className={loading ? "size-4 animate-spin" : "size-4"} /> {tc("refresh")}
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
         {!status?.exists ? (
           <div className="flex items-center justify-between gap-4">
-            <p className="text-muted-foreground text-sm">
-              尚未创建 ScopeSentry 数据源。创建后会新增一个占位 MCP（地址/密钥为空、未启用）。
-            </p>
+            <p className="text-muted-foreground text-sm">{tsync("noDatasourceDesc")}</p>
             <Button onClick={create} disabled={busy}>
-              创建数据源
+              {tsync("createDatasource")}
             </Button>
           </div>
         ) : (
           <>
             {!status.configured && (
-              <p className="text-amber-600 text-sm dark:text-amber-500">
-                数据源已创建但未配置，请填写 MCP 地址与 API Key 后启用。
-              </p>
+              <p className="text-amber-600 text-sm dark:text-amber-500">{tsync("notConfiguredHint")}</p>
             )}
             {status.configured && !status.enabled && (
-              <p className="text-amber-600 text-sm dark:text-amber-500">数据源已配置但未启用，保存后将自动启用。</p>
+              <p className="text-amber-600 text-sm dark:text-amber-500">{tsync("notEnabledHint")}</p>
             )}
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>MCP 地址</Label>
-                <Input placeholder="http://<主机>:8082/mcp" value={url} onChange={(e) => setUrl(e.target.value)} />
+                <Label>{tsync("mcpUrlLabel")}</Label>
+                <Input
+                  placeholder={tsync.raw("mcpUrlPlaceholder")}
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                />
               </div>
               <div className="space-y-1.5">
-                <Label>API Key（X-API-Key，留空保留原值）</Label>
+                <Label>{tsync("apiKeyLabel")}</Label>
                 <Input
                   type="password"
                   placeholder="ssk_..."
@@ -182,10 +189,10 @@ function DataSourceCard({
             </div>
             <div className="flex items-center gap-2">
               <Button onClick={save} disabled={busy}>
-                保存并启用
+                {tsync("saveAndEnable")}
               </Button>
               {status.enabled && status.tools.length > 0 && (
-                <span className="text-muted-foreground text-xs">已发现 {status.tools.length} 个工具</span>
+                <span className="text-muted-foreground text-xs">{tsync("toolsFound", { n: status.tools.length })}</span>
               )}
             </div>
           </>
@@ -196,26 +203,29 @@ function DataSourceCard({
 }
 
 function StatusBadge({ status, loading }: { status: SSStatus | null; loading: boolean }) {
-  if (loading || !status) return <Badge variant="secondary">检测中…</Badge>;
-  if (!status.exists) return <Badge variant="destructive">未创建</Badge>;
-  if (!status.configured) return <Badge variant="outline">未配置</Badge>;
-  if (!status.enabled) return <Badge variant="outline">未启用</Badge>;
+  const tsync = useTranslations("sync");
+  if (loading || !status) return <Badge variant="secondary">{tsync("badgeChecking")}</Badge>;
+  if (!status.exists) return <Badge variant="destructive">{tsync("badgeNotCreated")}</Badge>;
+  if (!status.configured) return <Badge variant="outline">{tsync("badgeNotConfigured")}</Badge>;
+  if (!status.enabled) return <Badge variant="outline">{tsync("badgeNotEnabled")}</Badge>;
   if (status.reachable)
     return (
       <Badge className="bg-emerald-600 hover:bg-emerald-600">
-        <CheckCircle2Icon className="mr-1 size-3" /> 已连接
+        <CheckCircle2Icon className="mr-1 size-3" /> {tsync("badgeConnected")}
       </Badge>
     );
   return (
     <Badge variant="destructive">
-      <AlertCircleIcon className="mr-1 size-3" /> 不可达
+      <AlertCircleIcon className="mr-1 size-3" /> {tsync("badgeUnreachable")}
     </Badge>
   );
 }
 
-// ── 同步工作区（项目 / 任务维度）────────────────────────────────────────────────
+// ── Sync workbench (project / task dimension) ────────────────────────────────
 
 function SyncWorkbench() {
+  const tsync = useTranslations("sync");
+  const tc = useTranslations("common");
   const [dimension, setDimension] = React.useState<Dimension>("project");
   const [assetTypes, setAssetTypes] = React.useState<Record<string, boolean>>({
     subdomain: true,
@@ -241,8 +251,8 @@ function SyncWorkbench() {
       dimension === "project"
         ? api.ssProjects(page, 50, search).then((r) => setProjects(r.projects))
         : api.ssTasks(page, 50, search).then(setTasks);
-    fn.catch((e) => toast.error(`加载列表失败：${e.message}`)).finally(() => setLoading(false));
-  }, [dimension, page, search]);
+    fn.catch((e) => toast.error(tsync("toastListFail", { message: e.message }))).finally(() => setLoading(false));
+  }, [dimension, page, search, tsync]);
 
   React.useEffect(() => {
     load();
@@ -263,11 +273,13 @@ function SyncWorkbench() {
     setSelected((prev) => (prev.size === rows.length ? new Set() : new Set(rows.map(idOf))));
   };
 
-  const chosenTypes = ASSET_TYPES.filter((t) => assetTypes[t.key]).map((t) => t.key);
+  const chosenTypes = ASSET_TYPES.filter((item) => assetTypes[item.key]).map((item) => item.key);
 
   const runSync = async () => {
-    if (selected.size === 0) return toast.error(`请至少选择一个${dimension === "project" ? "项目" : "任务"}`);
-    if (chosenTypes.length === 0) return toast.error("请至少选择一种资产类型");
+    if (selected.size === 0) {
+      return toast.error(dimension === "project" ? tsync("selectProjectFirst") : tsync("selectTaskFirst"));
+    }
+    if (chosenTypes.length === 0) return toast.error(tsync("selectTypeFirst"));
     setSyncing(true);
     setResult(null);
     try {
@@ -279,9 +291,9 @@ function SyncWorkbench() {
       });
       setResult(r);
       const total = Object.values(r.synced ?? {}).reduce((a, b) => a + b, 0);
-      toast.success(`同步完成，共入库 ${total} 条资产`);
+      toast.success(tsync("toastSynced", { n: total }));
     } catch (e) {
-      toast.error(`同步失败：${(e as Error).message}`);
+      toast.error(tsync("toastSyncFail", { message: (e as Error).message }));
     } finally {
       setSyncing(false);
     }
@@ -292,7 +304,7 @@ function SyncWorkbench() {
       return (
         <TableRow>
           <TableCell colSpan={4} className="py-8 text-center text-muted-foreground text-sm">
-            加载中…
+            {tc("loading")}
           </TableCell>
         </TableRow>
       );
@@ -301,7 +313,7 @@ function SyncWorkbench() {
       return (
         <TableRow>
           <TableCell colSpan={4} className="py-8 text-center text-muted-foreground text-sm">
-            无数据
+            {tsync("noData")}
           </TableCell>
         </TableRow>
       );
@@ -318,18 +330,18 @@ function SyncWorkbench() {
         </TableRow>
       ));
     }
-    return tasks.map((t) => (
-      <TableRow key={t.id} className="cursor-pointer" onClick={() => toggle(t.name)}>
+    return tasks.map((task) => (
+      <TableRow key={task.id} className="cursor-pointer" onClick={() => toggle(task.name)}>
         <TableCell onClick={(e) => e.stopPropagation()}>
-          <Checkbox checked={selected.has(t.name)} onCheckedChange={() => toggle(t.name)} />
+          <Checkbox checked={selected.has(task.name)} onCheckedChange={() => toggle(task.name)} />
         </TableCell>
-        <TableCell className="font-medium">{t.name}</TableCell>
+        <TableCell className="font-medium">{task.name}</TableCell>
         <TableCell>
-          <Badge variant={t.progress === 100 ? "secondary" : "outline"}>
-            {t.progress != null ? `${t.progress}%` : "—"}
+          <Badge variant={task.progress === 100 ? "secondary" : "outline"}>
+            {task.progress != null ? `${task.progress}%` : "—"}
           </Badge>
         </TableCell>
-        <TableCell className="text-muted-foreground text-xs">{t.endTime || t.creatTime || "—"}</TableCell>
+        <TableCell className="text-muted-foreground text-xs">{task.endTime || task.creatTime || "—"}</TableCell>
       </TableRow>
     ));
   };
@@ -337,10 +349,10 @@ function SyncWorkbench() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">选择数据同步</CardTitle>
+        <CardTitle className="text-base">{tsync("selectSync")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* 维度切换 */}
+        {/* Dimension switch */}
         <Tabs
           value={dimension}
           onValueChange={(v) => {
@@ -349,39 +361,39 @@ function SyncWorkbench() {
           }}
         >
           <TabsList>
-            <TabsTrigger value="project">项目维度</TabsTrigger>
-            <TabsTrigger value="task">任务维度</TabsTrigger>
+            <TabsTrigger value="project">{tsync("dimensionProject")}</TabsTrigger>
+            <TabsTrigger value="task">{tsync("dimensionTask")}</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {/* 资产类型 + 选项 */}
+        {/* Asset types + options */}
         <div className="flex flex-wrap items-center gap-4">
-          <span className="font-medium text-sm">同步资产：</span>
-          {ASSET_TYPES.map((t) => (
-            <label key={t.key} htmlFor={`at-${t.key}`} className="flex items-center gap-1.5 text-sm">
+          <span className="font-medium text-sm">{tsync("syncAssetsLabel")}</span>
+          {ASSET_TYPES.map((item) => (
+            <label key={item.key} htmlFor={`at-${item.key}`} className="flex items-center gap-1.5 text-sm">
               <Checkbox
-                id={`at-${t.key}`}
-                checked={!!assetTypes[t.key]}
-                onCheckedChange={(c) => setAssetTypes((prev) => ({ ...prev, [t.key]: !!c }))}
+                id={`at-${item.key}`}
+                checked={!!assetTypes[item.key]}
+                onCheckedChange={(c) => setAssetTypes((prev) => ({ ...prev, [item.key]: !!c }))}
               />
-              {t.label}
+              {tsync(item.labelKey)}
             </label>
           ))}
           {dimension === "project" && (
             <label htmlFor="create-company" className="flex items-center gap-1.5 text-sm">
               <Checkbox id="create-company" checked={createCompany} onCheckedChange={(c) => setCreateCompany(!!c)} />
-              按项目建立企业并写入资产范围
+              {tsync("createCompanyLabel")}
             </label>
           )}
         </div>
 
-        {/* 搜索 + 操作 */}
+        {/* Search + actions */}
         <div className="flex items-center gap-2">
           <div className="relative max-w-xs flex-1">
             <SearchIcon className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-8"
-              placeholder={dimension === "project" ? "搜索项目名" : "搜索任务名"}
+              placeholder={dimension === "project" ? tsync("searchProjectPlaceholder") : tsync("searchTaskPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -396,13 +408,13 @@ function SyncWorkbench() {
             <RefreshCwIcon className={loading ? "size-4 animate-spin" : "size-4"} />
           </Button>
           <div className="flex-1" />
-          <span className="text-muted-foreground text-xs">已选 {selected.size}</span>
+          <span className="text-muted-foreground text-xs">{tsync("selectedCount", { n: selected.size })}</span>
           <Button onClick={runSync} disabled={syncing || selected.size === 0}>
-            <DownloadIcon className={syncing ? "size-4 animate-pulse" : "size-4"} /> 同步选中
+            <DownloadIcon className={syncing ? "size-4 animate-pulse" : "size-4"} /> {tsync("syncSelected")}
           </Button>
         </div>
 
-        {/* 列表 */}
+        {/* List */}
         <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -410,16 +422,18 @@ function SyncWorkbench() {
                 <TableHead className="w-10">
                   <Checkbox checked={rows.length > 0 && selected.size === rows.length} onCheckedChange={toggleAll} />
                 </TableHead>
-                <TableHead>{dimension === "project" ? "项目名" : "任务名"}</TableHead>
+                <TableHead>
+                  {dimension === "project" ? tsync("colProjectName") : tsync("colTaskName")}
+                </TableHead>
                 {dimension === "project" ? (
                   <>
-                    <TableHead>标签</TableHead>
-                    <TableHead className="text-right">资产数</TableHead>
+                    <TableHead>{tsync("colTag")}</TableHead>
+                    <TableHead className="text-right">{tsync("colAssetCount")}</TableHead>
                   </>
                 ) : (
                   <>
-                    <TableHead>状态</TableHead>
-                    <TableHead>时间</TableHead>
+                    <TableHead>{tsync("colStatus")}</TableHead>
+                    <TableHead>{tsync("colTime")}</TableHead>
                   </>
                 )}
               </TableRow>
@@ -428,23 +442,23 @@ function SyncWorkbench() {
           </Table>
         </div>
 
-        {/* 分页 */}
+        {/* Pagination */}
         <div className="flex items-center justify-end gap-2">
           <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((p) => p - 1)}>
-            上一页
+            {tsync("prevPage")}
           </Button>
-          <span className="text-muted-foreground text-xs">第 {page} 页</span>
+          <span className="text-muted-foreground text-xs">{tsync("pageN", { page })}</span>
           <Button
             variant="outline"
             size="sm"
             disabled={rows.length < 50 || loading}
             onClick={() => setPage((p) => p + 1)}
           >
-            下一页
+            {tsync("nextPage")}
           </Button>
         </div>
 
-        {/* 结果 */}
+        {/* Result */}
         {result && <SyncResult result={result} />}
       </CardContent>
     </Card>
@@ -452,19 +466,30 @@ function SyncWorkbench() {
 }
 
 function SyncResult({ result }: { result: Awaited<ReturnType<typeof api.ssSync>> }) {
+  const tsync = useTranslations("sync");
   const synced = result.synced ?? {};
-  const labels: Record<string, string> = { subdomain: "子域名", service: "服务", app: "App", ip: "IP" };
+  // Asset-type labels for the synced counters. An if/else chain with literal t()
+  // calls keeps every key statically resolvable (the checker cannot see Record
+  // values whose property names do not match); unknown kinds fall through to the
+  // raw key, as before.
+  const typeLabel = (k: string): string => {
+    if (k === "subdomain") return tsync("assetTypeSubdomain");
+    if (k === "service") return tsync("assetTypeService");
+    if (k === "app") return tsync("assetTypeApp");
+    if (k === "ip") return tsync("assetTypeIp");
+    return k;
+  };
   return (
     <div className="space-y-2 rounded-md border bg-muted/40 p-3 text-sm">
       <div className="flex flex-wrap gap-3">
         {Object.entries(synced).map(([k, v]) => (
           <Badge key={k} variant="secondary">
-            {labels[k] ?? k}: {v}
+            {typeLabel(k)}: {v}
           </Badge>
         ))}
       </div>
       {result.companies && result.companies.length > 0 && (
-        <p className="text-muted-foreground">新建/更新企业：{result.companies.join("、")}</p>
+        <p className="text-muted-foreground">{tsync("companiesUpdated", { names: result.companies.join("、") })}</p>
       )}
       {result.warnings && result.warnings.length > 0 && (
         <ul className="list-inside list-disc text-amber-600 dark:text-amber-500">
@@ -478,7 +503,7 @@ function SyncResult({ result }: { result: Awaited<ReturnType<typeof api.ssSync>>
           {result.errors.slice(0, 20).map((em) => (
             <li key={em}>{em}</li>
           ))}
-          {result.errors.length > 20 && <li>…共 {result.errors.length} 条错误</li>}
+          {result.errors.length > 20 && <li>{tsync("errorsTotal", { n: result.errors.length })}</li>}
         </ul>
       )}
     </div>

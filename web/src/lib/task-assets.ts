@@ -1,29 +1,39 @@
+import type { useTranslations } from "next-intl";
+
 import type { NewAssetType } from "@/lib/types";
 
-const ASSET_TYPE_LABELS: Record<NewAssetType, string> = {
-  app: "应用",
-  endpoint: "接口",
-  ip: "IP",
-  root_domain: "根域名",
-  service: "服务",
-  subdomain: "子域名",
+type Translate = ReturnType<typeof useTranslations>;
+
+// Catalog keys (namespace `common`), not display copy: this module cannot call hooks, so
+// each exported label helper takes the component's translator. Entries use the `labelKey`
+// property form so the catalog checker can statically verify every key (Ruling 32).
+// Unknown runtime values fall back to the raw value, as the old label maps did.
+const ASSET_TYPE_LABEL_KEYS: Record<NewAssetType, { labelKey: string }> = {
+  app: { labelKey: "taskAssetTypeApp" },
+  endpoint: { labelKey: "taskAssetTypeEndpoint" },
+  ip: { labelKey: "taskAssetTypeIp" },
+  root_domain: { labelKey: "taskAssetTypeRootDomain" },
+  service: { labelKey: "taskAssetTypeService" },
+  subdomain: { labelKey: "taskAssetTypeSubdomain" },
 };
 
-const TASK_ASSET_SOURCE_LABELS: Record<string, string> = {
-  agent: "Agent 发现",
-  anchor: "黑板锚点",
-  api: "资产 API",
-  company: "企业关联",
-  legacy: "历史关联",
-  manual: "人工加入",
-  system: "系统关联",
-  task: "任务初始化",
+const TASK_ASSET_SOURCE_LABEL_KEYS: Record<string, { labelKey: string }> = {
+  agent: { labelKey: "taskAssetSourceAgent" },
+  anchor: { labelKey: "taskAssetSourceAnchor" },
+  api: { labelKey: "taskAssetSourceApi" },
+  company: { labelKey: "taskAssetSourceCompany" },
+  legacy: { labelKey: "taskAssetSourceLegacy" },
+  manual: { labelKey: "taskAssetSourceManual" },
+  system: { labelKey: "taskAssetSourceSystem" },
+  task: { labelKey: "taskAssetSourceTask" },
 };
 
-export function taskAssetTypeLabel(type: NewAssetType): string {
-  return ASSET_TYPE_LABELS[type];
+export function taskAssetTypeLabel(type: NewAssetType, t: Translate): string {
+  const key = ASSET_TYPE_LABEL_KEYS[type]?.labelKey;
+  return key ? t(key) : type;
 }
 
-export function taskAssetSourceLabel(source: string): string {
-  return TASK_ASSET_SOURCE_LABELS[source] ?? source;
+export function taskAssetSourceLabel(source: string, t: Translate): string {
+  const key = TASK_ASSET_SOURCE_LABEL_KEYS[source]?.labelKey;
+  return key ? t(key) : source;
 }

@@ -27,7 +27,7 @@ export type NavBadge = "new" | "soon";
 
 export interface NavSubItem {
   id: string;
-  title: string;
+  titleKey: string;
   url: string;
   icon?: LucideIcon;
   badge?: NavBadge;
@@ -37,7 +37,7 @@ export interface NavSubItem {
 
 interface NavItemBase {
   id: string;
-  title: string;
+  titleKey: string;
   icon?: LucideIcon;
   badge?: NavBadge;
   disabled?: boolean;
@@ -57,42 +57,42 @@ export type NavMainItem = NavMainLinkItem | NavMainParentItem;
 
 export interface NavGroup {
   id: number;
-  label?: string;
+  labelKey?: string;
   items: NavMainItem[];
 }
 
 export const sidebarItems: NavGroup[] = [
   {
     id: 1,
-    label: "功能",
+    labelKey: "group.features",
     items: [
-      { id: "dashboard", title: "仪表盘", url: "/dashboard", icon: LayoutDashboard },
-      { id: "chat", title: "对话", url: "/chat", icon: MessageSquare },
-      { id: "tasks", title: "任务", url: "/function/tasks", icon: Target },
-      { id: "findings", title: "发现", url: "/function/findings", icon: Bug },
-      { id: "traffic", title: "流量", url: "/function/traffic", icon: Activity },
-      { id: "commands", title: "工具执行", url: "/function/commands", icon: Terminal },
-      { id: "llm-records", title: "LLM 录制", url: "/function/llm-records", icon: Radio },
-      { id: "assets", title: "资产", url: "/function/assets", icon: Network },
-      { id: "sync", title: "资产同步", url: "/function/sync", icon: FolderSync },
-      { id: "workspace", title: "工作空间", url: "/function/workspace", icon: FolderOpen },
+      { id: "dashboard", titleKey: "items.dashboard", url: "/dashboard", icon: LayoutDashboard },
+      { id: "chat", titleKey: "items.chat", url: "/chat", icon: MessageSquare },
+      { id: "tasks", titleKey: "items.tasks", url: "/function/tasks", icon: Target },
+      { id: "findings", titleKey: "items.findings", url: "/function/findings", icon: Bug },
+      { id: "traffic", titleKey: "items.traffic", url: "/function/traffic", icon: Activity },
+      { id: "commands", titleKey: "items.commands", url: "/function/commands", icon: Terminal },
+      { id: "llm-records", titleKey: "items.llm-records", url: "/function/llm-records", icon: Radio },
+      { id: "assets", titleKey: "items.assets", url: "/function/assets", icon: Network },
+      { id: "sync", titleKey: "items.sync", url: "/function/sync", icon: FolderSync },
+      { id: "workspace", titleKey: "items.workspace", url: "/function/workspace", icon: FolderOpen },
     ],
   },
   {
     id: 2,
-    label: "系统",
+    labelKey: "group.system",
     items: [
-      { id: "llm", title: "LLM", url: "/system/llm", icon: Brain },
-      { id: "agents", title: "Agent", url: "/system/agents", icon: Bot },
-      { id: "mcp", title: "MCP", url: "/system/mcp", icon: Plug },
-      { id: "skills", title: "Skill", url: "/system/skills", icon: Sparkles },
-      { id: "tools", title: "工具", url: "/system/tools", icon: Wrench },
-      { id: "notify", title: "通知推送", url: "/system/notify", icon: BellRing },
-      { id: "intercept", title: "拦截规则", url: "/system/intercept", icon: ShieldAlert },
-      { id: "asset-intercept", title: "资产拦截", url: "/system/intercept/assets", icon: Ban },
-      { id: "approvals", title: "审批记录", url: "/system/intercept/approvals", icon: ClipboardList },
-      { id: "logs", title: "日志", url: "/system/logs", icon: ScrollText },
-      { id: "settings", title: "系统配置", url: "/system/settings", icon: Settings2 },
+      { id: "llm", titleKey: "items.llm", url: "/system/llm", icon: Brain },
+      { id: "agents", titleKey: "items.agents", url: "/system/agents", icon: Bot },
+      { id: "mcp", titleKey: "items.mcp", url: "/system/mcp", icon: Plug },
+      { id: "skills", titleKey: "items.skills", url: "/system/skills", icon: Sparkles },
+      { id: "tools", titleKey: "items.tools", url: "/system/tools", icon: Wrench },
+      { id: "notify", titleKey: "items.notify", url: "/system/notify", icon: BellRing },
+      { id: "intercept", titleKey: "items.intercept", url: "/system/intercept", icon: ShieldAlert },
+      { id: "asset-intercept", titleKey: "items.asset-intercept", url: "/system/intercept/assets", icon: Ban },
+      { id: "approvals", titleKey: "items.approvals", url: "/system/intercept/approvals", icon: ClipboardList },
+      { id: "logs", titleKey: "items.logs", url: "/system/logs", icon: ScrollText },
+      { id: "settings", titleKey: "items.settings", url: "/system/settings", icon: Settings2 },
     ],
   },
 ];

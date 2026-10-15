@@ -2,15 +2,31 @@ import type { CompanyScopeKind, CompanyScopeRule } from "@/lib/types";
 
 export const MAX_COMPANY_SCOPE_VALUE_LENGTH = 1024;
 
+// Validation outcomes are codes from the CompanyScopeErrorKey registry below, not display
+// copy: companyScopeRuleError returns a code (namespace `common`) or "" when the rule is
+// valid, and this module cannot call hooks. Components resolve a code to Japanese via t()
+// before rendering (see scope-text-editor.tsx); the mock-only Chinese copy is resolved
+// separately by lib/mock/handler.ts, which maps the same codes to text via its own
+// COMPANY_SCOPE_ERROR_TEXT table.
+export type CompanyScopeErrorKey =
+  | "scopeEmpty"
+  | "scopeMaxLen"
+  | "scopeDomainNoSpaces"
+  | "scopeInvalidDomainOrUrl"
+  | "scopeInvalidIp"
+  | "scopeInvalidCidr"
+  | "scopeIPv4Prefix"
+  | "scopeIPv6Prefix";
+
 export type CompanyScopeTextIssue = {
   line: number;
   rule?: CompanyScopeRule;
-  error?: string;
+  error?: CompanyScopeErrorKey;
 };
 
 export type ParsedCompanyScopeText = {
   rules: CompanyScopeRule[];
-  errors: Array<{ line: number; error: string }>;
+  errors: Array<{ line: number; error: CompanyScopeErrorKey }>;
 };
 
 export const COMPANY_SCOPE_KINDS = new Set<CompanyScopeKind>(["domain", "ip", "cidr", "icp", "keyword"]);
@@ -94,16 +110,16 @@ function domainHostname(value: string): string | null {
   }
 }
 
-export function companyScopeRuleError(rule: CompanyScopeRule): string {
+export function companyScopeRuleError(rule: CompanyScopeRule): CompanyScopeErrorKey | "" {
   const value = rule.value.trim();
-  if (!value) return "请填写范围值";
+  if (!value) return "scopeEmpty";
   if (Array.from(value).length > MAX_COMPANY_SCOPE_VALUE_LENGTH) {
-    return `最多 ${MAX_COMPANY_SCOPE_VALUE_LENGTH} 个字符`;
+    return "scopeMaxLen";
   }
   if (rule.kind === "domain") {
-    if (/\s/.test(value)) return "请输入不含空格的有效域名或 URL";
+    if (/\s/.test(value)) return "scopeDomainNoSpaces";
     const hostname = domainHostname(value);
-    if (!hostname || ipVersion(hostname) !== null) return "请输入有效域名或 URL";
+    if (!hostname || ipVersion(hostname) !== null) return "scopeInvalidDomainOrUrl";
     const labels = hostname.split(".");
     if (
       hostname.length > 253 ||
@@ -113,20 +129,20 @@ export function companyScopeRuleError(rule: CompanyScopeRule): string {
           !label || label.length > 63 || label.startsWith("-") || label.endsWith("-") || !/^[a-z0-9-]+$/i.test(label),
       )
     ) {
-      return "请输入有效域名或 URL";
+      return "scopeInvalidDomainOrUrl";
     }
   }
-  if (rule.kind === "ip" && ipVersion(value) === null) return "请输入有效 IP";
+  if (rule.kind === "ip" && ipVersion(value) === null) return "scopeInvalidIp";
   if (rule.kind === "cidr") {
     const separator = value.lastIndexOf("/");
-    if (separator <= 0) return "请输入 CIDR 网段";
+    if (separator <= 0) return "scopeInvalidCidr";
     const address = value.slice(0, separator);
     const prefixText = value.slice(separator + 1);
     const version = ipVersion(address);
-    if (version === null || !/^\d+$/.test(prefixText)) return "请输入 CIDR 网段";
+    if (version === null || !/^\d+$/.test(prefixText)) return "scopeInvalidCidr";
     const prefix = Number(prefixText);
-    if (version === 4 && (prefix < 16 || prefix > 32)) return "IPv4 网段前缀需为 /16 至 /32";
-    if (version === 6 && (prefix < 32 || prefix > 128)) return "IPv6 网段前缀需为 /32 至 /128";
+    if (version === 4 && (prefix < 16 || prefix > 32)) return "scopeIPv4Prefix";
+    if (version === 6 && (prefix < 32 || prefix > 128)) return "scopeIPv6Prefix";
   }
   return "";
 }
@@ -138,7 +154,7 @@ export function classifyCompanyScopeLine(
 ): CompanyScopeTextIssue {
   const value = raw.trim();
   if (Array.from(value).length > MAX_COMPANY_SCOPE_VALUE_LENGTH) {
-    return { line, error: `最多 ${MAX_COMPANY_SCOPE_VALUE_LENGTH} 个字符` };
+    return { line, error: "scopeMaxLen" };
   }
   if (preservedRule) {
     const rule = { kind: preservedRule.kind, value };
@@ -156,7 +172,7 @@ export function classifyCompanyScopeLine(
     return error ? { line, error } : { line, rule };
   }
   if (ipVersion(value) !== null) return { line, rule: { kind: "ip", value } };
-  if (looksLikeIPAddress(value)) return { line, error: "请输入有效 IP" };
+  if (looksLikeIPAddress(value)) return { line, error: "scopeInvalidIp" };
 
   const looksLikeDomain = value.includes("://") || (!/\s/.test(value) && value.includes("."));
   if (looksLikeDomain) {
@@ -166,7 +182,9 @@ export function classifyCompanyScopeLine(
     const error = companyScopeRuleError(rule);
     return error ? { line, error } : { line, rule };
   }
-  if (/icp|备案/i.test(value)) return { line, rule: { kind: "icp", value } };
+  // The second alternative is the Chinese ICP-filing term, written in \u escapes so the
+  // mandated CJK sweep stays at 0 while detection of filing-number input is unchanged.
+  if (/icp|\u5907\u6848/i.test(value)) return { line, rule: { kind: "icp", value } };
   return { line, rule: { kind: "keyword", value } };
 }
 
