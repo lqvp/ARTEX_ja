@@ -808,10 +808,13 @@ CREATE TABLE IF NOT EXISTS agent_prompts (
     template_text TEXT NOT NULL,
     note          TEXT,
     updated_by    TEXT,
+    builtin_hash  TEXT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (agent_id, version)
 );
--- 循环外键：agents.current_prompt_id → agent_prompts.id（需在两表创建后加）
+-- Idempotent column add for deployments that already have agent_prompts without builtin_hash.
+ALTER TABLE agent_prompts ADD COLUMN IF NOT EXISTS builtin_hash TEXT;
+-- Circular foreign key: agents.current_prompt_id -> agent_prompts.id (added after both tables exist)
 DO $$ BEGIN
     ALTER TABLE agents ADD CONSTRAINT fk_agents_curprompt
         FOREIGN KEY (current_prompt_id) REFERENCES agent_prompts(id) ON DELETE SET NULL;

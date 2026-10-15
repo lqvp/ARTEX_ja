@@ -693,7 +693,7 @@ export default function TasksPage() {
         const summary = t("toastDeletedBulk", { n: deleted.length });
         const fullSummary = deleteSummary(summary, details, t.raw("toastDeletedBulkSuffix"));
         if (warnings.length > 0) {
-          toast.warning(t("toastCleanupWarning", { summary: fullSummary, warning: warnings.join("；") }));
+          toast.warning(t("toastCleanupWarning", { summary: fullSummary, warning: warnings.join("、") }));
         } else {
           toast.success(fullSummary);
         }
@@ -702,7 +702,7 @@ export default function TasksPage() {
         const head = failed
           .slice(0, 3)
           .map((f) => `#${f.id}（${f.message}）`)
-          .join("；");
+          .join("、");
         toast.error(
           t("toastBulkFail", { n: failed.length, head, tail: failed.length > 3 ? t("toastEtcSuffix") : "" }),
         );
@@ -736,7 +736,7 @@ export default function TasksPage() {
       const reason = failed
         .slice(0, 3)
         .map((item) => `#${item.id}（${item.error || t("reasonChanged")}）`)
-        .join("；");
+        .join("、");
       toast.error(t("toastArchiveFailedToast", { n: failed.length, reason }));
     }
     setSelectedIds(new Set());
@@ -770,7 +770,7 @@ export default function TasksPage() {
           const reason = failed
             .slice(0, 3)
             .map((item) => `#${item.id}（${item.error || t("reasonChanged")}）`)
-            .join("；");
+            .join("、");
           toast.error(
             t("toastBatchFail", {
               n: failed.length,
@@ -818,7 +818,7 @@ export default function TasksPage() {
           const reason = failed
             .slice(0, 3)
             .map((item) => `#${item.id}（${item.error || t("reasonGone")}）`)
-            .join("；");
+            .join("、");
           toast.error(
             t("toastMoveFailToast", {
               n: failed.length,

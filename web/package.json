@@ -12,6 +12,7 @@
     "check": "biome check",
     "check:fix": "biome check --write",
     "check:catalog": "node scripts/check-catalog.mjs",
+  "test": "node --test src/lib/*.test.mjs",
     "prepare": "husky",
     "generate:presets": "ts-node -P tsconfig.scripts.json src/scripts/generate-theme-presets.ts"
   },

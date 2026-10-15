@@ -188,17 +188,19 @@ func idSet(ids []int64) map[int64]bool {
 }
 
 // seedPrompts writes each built-in agent's code-default prompt body into
-// agent_prompts on startup — first-insert only (SeedPromptIfEmpty is a no-op once
-// any version exists), so the DB becomes the authoritative editable source while
-// user edits survive restarts. Runs after seedBuiltins has created the agent rows.
+// agent_prompts on startup. If the agent's current prompt is a built-in version
+// (builtin_hash set and matching), nothing changes; if the code template has
+// moved on, a new hash-stamped version is appended and made current. Operator
+// edits (builtin_hash NULL) are never touched. Runs after seedBuiltins has created
+// the agent rows.
 func seedPrompts(pg *db.DB) {
 	for key, tmpl := range agent.BuiltinPromptSeeds() {
 		a, err := pg.GetAgentByKey(key)
 		if err != nil || a == nil {
-			log.Printf("[prompts] seed %s skipped: agent does not exist (%v)", key, err)
+			log.Printf("[prompts] seed %s skipped: agent not found (%v)", key, err)
 			continue
 		}
-		if err := pg.SeedPromptIfEmpty(a.ID, tmpl); err != nil {
+		if err := pg.PromptSeed(a.ID, tmpl); err != nil {
 			log.Printf("[prompts] seed %s failed: %v", key, err)
 		}
 	}

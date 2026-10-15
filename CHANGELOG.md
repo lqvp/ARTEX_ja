@@ -1,5 +1,9 @@
 # 更新日志
 
+> **Language policy:** From 2026-10-09 onward, entries are written in English.
+> Entries dated before that date are preserved verbatim as the historical record of
+> what was released.
+
 本项目的重要变更记录在此文件中，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
 ## [Unreleased]

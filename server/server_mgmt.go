@@ -272,7 +272,7 @@ func (s *Server) pgCreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// starter prompt so the editor shows something editable from the start.
-	if err := pg.SeedPromptIfEmpty(a.ID, agent.DefaultAssistantPrompt); err != nil {
+	if err := pg.PromptSeed(a.ID, agent.DefaultAssistantPrompt); err != nil {
 		log.Printf("[agents] failed to seed starter prompt for %s: %v", a.Key, err)
 	}
 	writeJSON(w, 200, agentDTO(a))
@@ -524,7 +524,7 @@ func (s *Server) pgSavePrompt(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, bad)
 		return
 	}
-	ver, err := pg.SavePrompt(a.ID, body.Template, body.Note, "ui")
+	ver, err := pg.SavePrompt(a.ID, body.Template, body.Note, "ui", "")
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return

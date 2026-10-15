@@ -106,11 +106,11 @@ func TestConfigStores(t *testing.T) {
 	if err != nil || ag == nil {
 		t.Fatalf("planner agent: %v", err)
 	}
-	v1, err := d.SavePrompt(ag.ID, "You are the planner {{.Goal}}", "init", "test")
+	v1, err := d.SavePrompt(ag.ID, "You are the planner {{.Goal}}", "init", "test", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	v2, _ := d.SavePrompt(ag.ID, "You are the planner v2 {{.Goal}} {{.Scope}}", "edit", "test")
+	v2, _ := d.SavePrompt(ag.ID, "You are the planner v2 {{.Goal}} {{.Scope}}", "edit", "test", "")
 	if v2 != v1+1 {
 		t.Fatalf("version should increment: %d -> %d", v1, v2)
 	}
@@ -193,4 +193,69 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+func TestPromptSeedHashStable(t *testing.T) {
+	if PromptSeedHash("abc") != PromptSeedHash("abc") {
+		t.Fatal("hash must be deterministic")
+	}
+	if PromptSeedHash("abc") == PromptSeedHash("abd") {
+		t.Fatal("different content must hash differently")
+	}
+}
+
+func TestPromptSeedResetsBuiltinButNotOperatorEdits(t *testing.T) {
+	d, err := Open(testDSN(t))
+	if err != nil {
+		t.Skipf("postgres unavailable (%v) — skipping", err)
+	}
+	defer d.Close()
+
+	ag, err := d.GetAgentByKey("planner")
+	if err != nil || ag == nil {
+		t.Fatalf("planner agent: %v", err)
+	}
+	count := func() int {
+		vs, err := d.ListPromptVersions(ag.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(vs)
+	}
+
+	// First seed writes the template and stamps it.
+	if err := d.PromptSeed(ag.ID, "planner v1"); err != nil {
+		t.Fatal(err)
+	}
+	if cur, _ := d.CurrentPrompt(ag.ID); cur != "planner v1" {
+		t.Fatalf("seeded prompt = %q", cur)
+	}
+
+	// Same content → no new version.
+	before := count()
+	if err := d.PromptSeed(ag.ID, "planner v1"); err != nil {
+		t.Fatal(err)
+	}
+	if after := count(); after != before {
+		t.Fatalf("identical seed must not add a version: %d -> %d", before, after)
+	}
+
+	// Changed built-in content → new version wins.
+	if err := d.PromptSeed(ag.ID, "planner v2"); err != nil {
+		t.Fatal(err)
+	}
+	if cur, _ := d.CurrentPrompt(ag.ID); cur != "planner v2" {
+		t.Fatalf("reseed did not take effect: %q", cur)
+	}
+
+	// An operator edit is unstamped, so a later seed must not clobber it.
+	if _, err := d.SavePrompt(ag.ID, "hand written", "edit", "operator", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.PromptSeed(ag.ID, "planner v3"); err != nil {
+		t.Fatal(err)
+	}
+	if cur, _ := d.CurrentPrompt(ag.ID); cur != "hand written" {
+		t.Fatalf("operator edit was clobbered: %q", cur)
+	}
 }

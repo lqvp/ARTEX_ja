@@ -169,25 +169,25 @@ export async function http<T>(path: string, init?: RequestInit): Promise<T> {
 // Token is appended as ?token= because SSE can't carry cookies cross-origin.
 // mockReport returns a canned Markdown report for the demo.
 function mockReport(_task?: string): string {
-  return `# ARTEX 渗透测试报告 — Acme Corp
+  return `# ARTEX ペネトレーションテストレポート — Acme Corp
 
-## 概览
-- 范围：acme.com（含 www / admin / api / shop / vpn 子域）
-- 已确认发现：6 项（高危 3 · 中危 3 · 低危 2）
-- 引擎模式：exploring
+## 概要
+- 範囲：acme.com（www / admin / api / shop / vpn サブドメインを含む）
+- 確認済みの発見：6 件（高 3 · 中 3 · 低 2）
+- エンジンモード：exploring
 
-## 关键发现
-1. **[高] 后台默认口令** admin.acme.com admin/admin123 → 可完全接管后台。
-2. **[高] SQL 注入** www.acme.com/search?q= → 可读取 acme_prod 库。
-3. **[高] IDOR** api.acme.com/v1/orders?id= → 可越权读取他人订单（含手机号/地址）。
-4. **[中] 反射型 XSS**、**暴露 .git 源码**、**登录无速率限制**。
+## 主要な発見
+1. **[高] 管理画面のデフォルト認証情報** admin.acme.com admin/admin123 → 管理画面を完全に乗っ取られる。
+2. **[高] SQL インジェクション** www.acme.com/search?q= → acme_prod データベースを読み取られる。
+3. **[高] IDOR** api.acme.com/v1/orders?id= → 他ユーザーの注文を不正に読み取られる（電話番号/住所を含む）。
+4. **[中] 反射型 XSS**、**.git ソースコードの露出**、**ログインのレート制限なし**。
 
-## 建议
-- 后台强制改密 + 启用 MFA、封禁默认口令。
-- search 接口参数化查询、输出编码。
-- API 增加对象级授权校验（IDOR）、更换强 JWT 密钥。
+## 推奨事項
+- 管理画面のパスワード変更を強制 + MFA を有効化、デフォルト認証情報を禁止する。
+- search インターフェースをパラメータ化クエリにし、出力エンコーディングを実施する。
+- API にオブジェクトレベルの認可チェック（IDOR）を追加し、強力な JWT 鍵に変更する。
 
-> （demo）本报告由 mock 数据生成，仅用于界面演示。`;
+> （デモ）本レポートはモックデータから生成されたもので、画面デモの目的のみに使用されます。`;
 }
 
 export function sseUrl(path: string): string {
@@ -462,19 +462,19 @@ export const api = {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: fd,
     });
-    if (!r.ok) throw new Error(`上传失败: ${r.status}`);
+    if (!r.ok) throw new Error(`Upload failed: ${r.status}`);
     return r.json() as Promise<{ uploaded: number }>;
   },
   workspaceDownload: async (path: string) => {
     let blob: Blob;
     if (MOCK) {
-      blob = new Blob([`（demo）${path} 的下载内容示例。`], { type: "text/plain" });
+      blob = new Blob([`(demo) download content sample for ${path}.`], { type: "text/plain" });
     } else {
       const token = getToken();
       const r = await fetch(`/api/workspace/download?path=${encodeURIComponent(path)}`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
-      if (!r.ok) throw new Error(`下载失败: ${r.status}`);
+      if (!r.ok) throw new Error(`Download failed: ${r.status}`);
       blob = await r.blob();
     }
     const objUrl = URL.createObjectURL(blob);
@@ -673,8 +673,8 @@ export const api = {
       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     );
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "下载失败" }));
-      throw new Error(error.error ?? "下载失败");
+      const error = await response.json().catch(() => ({ error: "Download failed" }));
+      throw new Error(error.error ?? "Download failed");
     }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
@@ -854,8 +854,7 @@ export const api = {
   // configured, each with its own filter rules), so it forms its own group instead of
   // being squeezed into the flat settings key-value space.
   notifyMeta: () => get<NotificationMeta>(`/notify/meta`),
-  notifyChannels: () =>
-    get<{ channels: NotificationChannel[] }>(`/notify/channels`).then((r) => arr(r.channels)),
+  notifyChannels: () => get<{ channels: NotificationChannel[] }>(`/notify/channels`).then((r) => arr(r.channels)),
   notifyCreateChannel: (payload: {
     name: string;
     kind: string;
@@ -931,7 +930,7 @@ export const api = {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: fd,
     });
-    if (!r.ok) throw new Error(`上传失败: ${r.status} ${await r.text()}`);
+    if (!r.ok) throw new Error(`Upload failed: ${r.status} ${await r.text()}`);
     return r.json() as Promise<{ attachments: ChatAttachment[] }>;
   },
   stopChat: (taskId: string) => post<{ status: string }>(`/tasks/${taskId}/chat/stop`, {}),

@@ -85,8 +85,8 @@ func TestFindingTrafficToolUpgradePreservesCustomization(t *testing.T) {
 		t.Fatal("missing worker", err)
 	}
 	oldPrompt, _ := pg.CurrentPrompt(worker.ID)
-	t.Cleanup(func() { pg.SavePrompt(worker.ID, oldPrompt, "restore test fixture", "test") })
-	if _, err := pg.SavePrompt(worker.ID, "USER CUSTOM PROMPT", "test", "test"); err != nil {
+	t.Cleanup(func() { pg.SavePrompt(worker.ID, oldPrompt, "restore test fixture", "test", "") })
+	if _, err := pg.SavePrompt(worker.ID, "USER CUSTOM PROMPT", "test", "test", ""); err != nil {
 		t.Fatal(err)
 	}
 	custom := json.RawMessage(`{"type":"object","properties":{"evidence":{"type":"string","description":"user evidence instructions"}},"required":["evidence"]}`)

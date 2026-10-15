@@ -50,6 +50,9 @@ export function mentionToken(item: ChatMention) {
 
 // Tokens persisted before the ASCII-alias migration embed the Chinese display label as
 // the kind segment; both forms stay matchable so pre-migration history still renders.
+// allowlist: legacy mention wire format — pre-migration tokens such as `@[漏洞#1 X]` are
+// persisted in conversation history and must keep parsing (see spec §7); translating these
+// labels would break every pre-migration message's mention chips.
 const LEGACY_MENTION_LABELS = "漏洞|资产|企业|接口|IP|应用|域名|子域名|服务";
 const MENTION_ALIASES = "finding|asset|company|endpoint|ip|app|domain|subdomain|service";
 // The kind alternation must stay capturing: group 1 is the kind segment, group 2 the id,

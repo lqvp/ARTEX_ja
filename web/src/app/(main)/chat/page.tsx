@@ -1315,7 +1315,7 @@ export default function ChatPage() {
         const details = failed
           .slice(0, 3)
           .map((item) => `#${item.id}（${item.error}）`)
-          .join("；");
+          .join("、");
         toast.error(
           t("bulkDeletePartial", {
             n: failed.length,

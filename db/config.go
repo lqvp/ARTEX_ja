@@ -2,7 +2,9 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -736,30 +738,43 @@ func (d *DB) CurrentPrompt(agentID int64) (string, error) {
 	return tmpl.String, err
 }
 
-// SeedPromptIfEmpty writes the code-default template as the agent's first prompt
-// version ONLY when it has none yet (current_prompt_id IS NULL). Mirrors
-// SeedTool's first-insert-only philosophy: a user's edited prompt is never
-// clobbered on restart. Idempotent — a no-op once any version exists.
-func (d *DB) SeedPromptIfEmpty(agentID int64, tmpl string) error {
+func PromptSeedHash(tmpl string) string {
+	sum := sha256.Sum256([]byte(tmpl))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
+func (d *DB) PromptSeed(agentID int64, tmpl string) error {
 	var cur sql.NullInt64
 	if err := d.QueryRow(`SELECT current_prompt_id FROM agents WHERE id=$1`, agentID).Scan(&cur); err != nil {
 		return err
 	}
-	if cur.Valid {
-		return nil // already seeded or user-edited → leave it
+	newHash := PromptSeedHash(tmpl)
+	if !cur.Valid {
+		_, err := d.SavePrompt(agentID, tmpl, "Built-in default", "system", newHash)
+		return err
 	}
-	_, err := d.SavePrompt(agentID, tmpl, "Built-in default", "system")
+	var builtinHash sql.NullString
+	if err := d.QueryRow(`SELECT builtin_hash FROM agent_prompts WHERE id=$1`, cur.Int64).Scan(&builtinHash); err != nil {
+		return err
+	}
+	if !builtinHash.Valid {
+		return nil // operator-authored — never overwrite
+	}
+	if builtinHash.String == newHash {
+		return nil // identical built-in — no new version
+	}
+	_, err := d.SavePrompt(agentID, tmpl, "Built-in default (reseed)", "system", newHash)
 	return err
 }
 
 // ResetPromptToDefault appends the code-default template as a new version and
 // points current at it — the explicit "restore to built-in default" action.
 func (d *DB) ResetPromptToDefault(agentID int64, tmpl string) (int, error) {
-	return d.SavePrompt(agentID, tmpl, "Restore to built-in default", "system")
+	return d.SavePrompt(agentID, tmpl, "Restore to built-in default", "system", "")
 }
 
 // SavePrompt appends a new version and points current_prompt_id at it.
-func (d *DB) SavePrompt(agentID int64, template, note, by string) (int, error) {
+func (d *DB) SavePrompt(agentID int64, template, note, by string, hash string) (int, error) {
 	tx, err := d.Begin()
 	if err != nil {
 		return 0, err
@@ -770,8 +785,8 @@ func (d *DB) SavePrompt(agentID int64, template, note, by string) (int, error) {
 		return 0, err
 	}
 	var pid int64
-	if err := tx.QueryRow(`INSERT INTO agent_prompts(agent_id,version,template_text,note,updated_by) VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,'')) RETURNING id`,
-		agentID, ver, template, note, by).Scan(&pid); err != nil {
+	if err := tx.QueryRow(`INSERT INTO agent_prompts(agent_id,version,template_text,note,updated_by,builtin_hash) VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),NULLIF($6,'')) RETURNING id`,
+		agentID, ver, template, note, by, hash).Scan(&pid); err != nil {
 		return 0, err
 	}
 	if _, err := tx.Exec(`UPDATE agents SET current_prompt_id=$1 WHERE id=$2`, pid, agentID); err != nil {

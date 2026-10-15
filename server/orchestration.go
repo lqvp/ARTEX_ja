@@ -564,10 +564,10 @@ func (s *Server) unbindGoalMetDefault() {
 }
 
 // reseedGoalsPrompt refreshes the goals decomposer prompt to the CURRENT CODE DEFAULT — because the default body added
-// the "extract operation constraints (set_constraints) before decomposing goals" step, but SeedPromptIfEmpty is first-insert-only, so an old DB's
+// the "extract operation constraints (set_constraints) before decomposing goals" step, but PromptSeed is first-insert-only, so an old DB's
 // existing version 1 never gets it. We use version management to APPEND A NEW VERSION and switch to it (ResetPromptToDefault);
 // the old version stays in history, and a user who customized it can restore it from the version log. A settings flag guards it → runs once;
-// bump this flag if the default changes again. Fresh DBs need nothing (SeedPromptIfEmpty already seeds the latest default).
+// bump this flag if the default changes again. Fresh DBs need nothing (PromptSeed already seeds the latest default).
 func (s *Server) reseedGoalsPrompt() {
 	const flag = "goals_prompt_constraint_step_v1"
 	if v, _, _ := s.m.pg.GetSetting(flag); v == "true" {
@@ -595,9 +595,9 @@ func (s *Server) reseedGoalsPrompt() {
 
 // reseedMainAgentPrompt refreshes the mainagent prompt to the CURRENT CODE DEFAULT — the default body added this guidance:
 // "when all goals are met and add_intent dispatches an intent directly, ask the person whether to register it as a formal goal",
-// but SeedPromptIfEmpty is first-insert-only, so an old DB's existing version never gets it. We use version management to APPEND
+// but PromptSeed is first-insert-only, so an old DB's existing version never gets it. We use version management to APPEND
 // A NEW VERSION and switch to it (ResetPromptToDefault); the old version stays in history and a user who customized it can restore
-// it from the version log. A settings flag guards it → runs once. Fresh DBs need nothing (SeedPromptIfEmpty already seeds the latest default). Structurally identical to reseedGoalsPrompt.
+// it from the version log. A settings flag guards it → runs once. Fresh DBs need nothing (PromptSeed already seeds the latest default). Structurally identical to reseedGoalsPrompt.
 func (s *Server) reseedMainAgentPrompt() {
 	const flag = "mainagent_prompt_goalless_intent_v1"
 	if v, _, _ := s.m.pg.GetSetting(flag); v == "true" {
@@ -625,9 +625,9 @@ func (s *Server) reseedMainAgentPrompt() {
 
 // reseedPlannerPrompt refreshes the planner prompt to the CURRENT CODE DEFAULT — the default body was compacted and restructured, demoting "restraint"
 // to dedup only, adding "depth before coverage" and a "hard bottom line: with goals unmet and no running intents, a round must produce output", plus an upper bound on negative-conclusion review.
-// Bump the flag below (currently v2) on every substantive default change so existing old DBs refresh once more. SeedPromptIfEmpty is first-insert-only, so an old DB's existing version never gets it — use version management
+// Bump the flag below (currently v2) on every substantive default change so existing old DBs refresh once more. PromptSeed is first-insert-only, so an old DB's existing version never gets it — use version management
 // to APPEND A NEW VERSION and switch to it (ResetPromptToDefault); the old version stays in history and a user who customized it can restore it from the version
-// log. A settings flag guards it → runs once. Fresh DBs need nothing (SeedPromptIfEmpty already seeds the latest default). Structurally identical to
+// log. A settings flag guards it → runs once. Fresh DBs need nothing (PromptSeed already seeds the latest default). Structurally identical to
 // reseedGoalsPrompt.
 func (s *Server) reseedPlannerPrompt() {
 	const flag = "planner_prompt_compact_realistic_v2"
@@ -657,7 +657,7 @@ func (s *Server) reseedPlannerPrompt() {
 // reseedWorkerPrompt refreshes the worker prompt to the CURRENT CODE DEFAULT — the default body's record_fact section dropped the whole
 // "negative conclusions: write observations + tentative readings" sentence and decoupled confidence (observed/inferred) from "whether this intent's means are exhausted" (both mislead the planner),
 // while tightening the facts-array split to the rare exception of conclusions that are "mutually independent and impossible to merge". Bump the flag to v3 so existing old DBs refresh once more.
-// SeedPromptIfEmpty is first-insert-only, so an old DB's existing version never gets it — use version management to APPEND A NEW VERSION and switch to it; the old version stays in history and can be restored.
+// PromptSeed is first-insert-only, so an old DB's existing version never gets it — use version management to APPEND A NEW VERSION and switch to it; the old version stays in history and can be restored.
 // A settings flag guards it → runs once. Fresh DBs need nothing. Structurally identical to reseedGoalsPrompt.
 func (s *Server) reseedWorkerPrompt() {
 	const flag = "worker_prompt_compact_v4"
@@ -748,7 +748,7 @@ func (s *Server) seedReporterAgent() {
 		log.Printf("[reporter] failed to create agent: %v", err)
 		return
 	}
-	if err := s.m.pg.SeedPromptIfEmpty(a.ID, agent.ReporterDefaultPrompt); err != nil {
+	if err := s.m.pg.PromptSeed(a.ID, agent.ReporterDefaultPrompt); err != nil {
 		log.Printf("[reporter] failed to seed prompt: %v", err)
 	}
 	// trigger run policy: parallel + none — one report per finding, multiple findings run concurrently, each writing its own.
