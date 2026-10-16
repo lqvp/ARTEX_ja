@@ -8,6 +8,13 @@
 
 ## [Unreleased]
 
+## [0.3.17_ja] - 2026-10-16
+
+### Japanese edition
+
+- The Go module path now matches this fork: `github.com/lqvp/artex_ja` (all internal imports updated; the vendored norma SDK keeps its upstream import path via the `replace` directive).
+- The container image `ghcr.io/lqvp/artex_ja` is published for the first time under this name (the earlier `ghcr.io/lqvp/artex` package is superseded and can be deleted).
+
 ## [0.3.16_ja] - 2026-10-16
 
 ### Japanese edition

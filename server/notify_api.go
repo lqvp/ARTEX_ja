@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Autumn-27/artex/db"
-	"github.com/Autumn-27/artex/notify"
+	"github.com/lqvp/artex_ja/db"
+	"github.com/lqvp/artex_ja/notify"
 )
 
 // This file holds the HTTP endpoints for push notifications. All routes are mounted after requireAuth (see Handler()),

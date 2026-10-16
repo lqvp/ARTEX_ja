@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Autumn-27/artex/db"
+	"github.com/lqvp/artex_ja/db"
 )
 
 // Human CRUD API for the overview's goal management. It writes the same set of goal nodes as the agent-side set_goals tool,

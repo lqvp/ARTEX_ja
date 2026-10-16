@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Autumn-27/artex/selfupdate"
+	"github.com/lqvp/artex_ja/selfupdate"
 )
 
 // HTTP surface for one-click page updates. All real download/verify/swap logic lives in the selfupdate package;

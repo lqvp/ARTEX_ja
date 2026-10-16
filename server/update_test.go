@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Autumn-27/artex/selfupdate"
+	"github.com/lqvp/artex_ja/selfupdate"
 )
 
 // releaseCache is the layer that protects the GitHub quota: the unauthenticated API allows

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Autumn-27/artex/db"
+	"github.com/lqvp/artex_ja/db"
 )
 
 // Manual CRUD endpoints for the overview's "Constraint Management" + parsing of the injection-scope switches. Operational

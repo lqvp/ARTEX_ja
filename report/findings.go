@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Autumn-27/artex/db"
+	"github.com/lqvp/artex_ja/db"
 )
 
 // Rendering for the Findings-page "Export": renders a batch of findings rows as

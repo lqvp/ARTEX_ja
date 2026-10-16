@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Autumn-27/artex/notify"
+	"github.com/lqvp/artex_ja/notify"
 )
 
 // This file's cases all connect to real PostgreSQL (skipped when unavailable). The SQL uses FOR UPDATE SKIP LOCKED, make_interval, JSONB, and multi-row IN(...) placeholder concatenation - constructs that "compile but can fail at runtime", only verified by actually running.

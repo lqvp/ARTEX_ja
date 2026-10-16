@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Autumn-27/artex/db"
+	"github.com/lqvp/artex_ja/db"
 )
 
 // ctxKey is the unexported context key type to avoid collisions.

@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Autumn-27/artex/db"
-	"github.com/Autumn-27/artex/notify"
+	"github.com/lqvp/artex_ja/db"
+	"github.com/lqvp/artex_ja/notify"
 )
 
 // This file covers the end-to-end behavior of push notifications: finding persisted → event → fan-out → real HTTP send.
