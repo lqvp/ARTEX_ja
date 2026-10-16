@@ -12,7 +12,8 @@ import (
 
 // Repo is the publishing source. Hard-coded rather than configurable: a configurable
 // update source would be a remote-code-execution channel, which cannot be allowed.
-const Repo = "Autumn-27/artex"
+// This fork publishes its releases here (the ja-translated edition).
+const Repo = "lqvp/ARTEX"
 
 // latestURL is GitHub's "latest official release" interface. It auto-skips prereleases and drafts.
 const latestURL = "https://api.github.com/repos/" + Repo + "/releases/latest"
