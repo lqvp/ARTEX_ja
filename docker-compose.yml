@@ -15,12 +15,12 @@ services:
     restart: unless-stopped
 
   artex:
-    # Image source is self-maintained by this repository (the original autumn27/artex was
+    # Image source is GHCR, published by the release workflow (the original autumn27/artex was
     # deleted from Docker Hub).
     # For normal deployment pull this image directly; if the pull fails (or you want to
     # modify the code), build locally:
     #   docker compose build
-    image: mianhuatang11/artex:${ARTEX_TAG:-latest}
+    image: ghcr.io/lqvp/artex:${ARTEX_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
