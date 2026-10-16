@@ -42,10 +42,11 @@ RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" go build -tags embedui -trimpath -o /ou
 ########## Stage 3: runtime image (same as the original: tools + preinstalled Playwright) ##########
 FROM python:3.12-slim-bookworm
 ARG NPM_REGISTRY=https://registry.npmmirror.com
-# The runtime layer's global npm installs and the chromium download also use China mirrors
-# (reachable from global networks too).
-ENV npm_config_registry=$NPM_REGISTRY \
-    PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
+# The runtime layer's global npm installs use the mirror by default (override with
+# --build-arg NPM_REGISTRY=...). Playwright browsers download from the official CDN —
+# the China mirror lags behind new Chromium builds; behind mainland networks set
+# PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright explicitly.
+ENV npm_config_registry=$NPM_REGISTRY
 # Common tools: ripgrep / curl / vim, plus a batch of recon staples (add/remove as needed).
 # Node 20.x from NodeSource: bookworm's bundled apt nodejs is 18, and Playwright requires >=20.
 RUN apt-get update && apt-get install -y --no-install-recommends \
