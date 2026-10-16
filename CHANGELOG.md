@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+## [0.3.15_ja] - 2026-10-16
+
+### Japanese edition
+
+- Full i18n migration of this fork: English Go backend source, comments, docs, skills, scripts, and vendored norma SDK; Japanese web UI via the `ja.json` catalog with Japanese mock data.
+- Images are published to `ghcr.io/lqvp/artex` (pushed by the release workflow via `GITHUB_TOKEN`); the Dockerfile is now a multi-stage source build (frontend export → Go build → runtime).
+- Test expectations updated across all packages; verified with a real PostgreSQL instance.
+
 ## [0.3.15] - 2026-10-07
 
 ### 拦截
