@@ -20,7 +20,7 @@ services:
     # For normal deployment pull this image directly; if the pull fails (or you want to
     # modify the code), build locally:
     #   docker compose build
-    image: ghcr.io/lqvp/artex:${ARTEX_TAG:-latest}
+    image: ghcr.io/lqvp/artex_ja:${ARTEX_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
