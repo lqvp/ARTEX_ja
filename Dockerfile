@@ -29,6 +29,9 @@ ARG TARGETARCH
 ARG GOPROXY=https://goproxy.cn,https://proxy.golang.org,direct
 WORKDIR /src
 COPY go.mod go.sum ./
+# The norma replace directive (./norma) requires the vendored module to exist
+# before `go mod download` can resolve the module graph.
+COPY norma/ ./norma/
 RUN go mod download
 COPY . .
 # Frontend static artifacts are copied in from the web stage (.dockerignore already excludes
