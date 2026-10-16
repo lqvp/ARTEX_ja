@@ -25,7 +25,8 @@ web/next-env.d.ts
 *.swo
 
 # docs
-/docs/
+# Only the local superpowers working documents (plans/ledger/reviews) stay out of the repo.
+/docs/superpowers/
 
 # os
 .DS_Store
